@@ -100,3 +100,17 @@ test('a mesma pessoa pode voltar em cultos diferentes do mês', () => {
   assert.equal(planned[0].people[0].personId, 'renata');
   assert.equal(planned[1].people[0].personId, 'renata');
 });
+
+test('cada função recebe exatamente uma pessoa, mesmo se pedida mais de uma vez', () => {
+  const db = emptyDb();
+  for (const name of ['Ana', 'Joao', 'Maely']) service.createPerson(db, { name, skills: ['Câmera'] });
+  const result = service.generateMediaTeam(db, {
+    title: 'Culto',
+    date: '2026-11-01',
+    start: '18:00',
+    end: '20:00',
+    roles: [{ role: 'Câmera', count: 3 }],
+  });
+  assert.equal(result.people.length, 1);
+  assert.deepEqual(result.unfilled, []);
+});

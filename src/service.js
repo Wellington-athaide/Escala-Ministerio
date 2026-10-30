@@ -238,12 +238,13 @@ function mediaSlot(media, { date, start, end, endDate }) {
   return slot;
 }
 
+// Cada função recebe exatamente uma pessoa.
 function parseRoles(roles) {
   if (!Array.isArray(roles) || !roles.length) fail('informe pelo menos uma função');
   for (const r of roles) {
-    if (!text(r.role, 60) || !Number.isInteger(r.count) || r.count < 1) fail('cada função precisa de nome e quantidade inteira maior que zero');
+    if (!text(r.role, 60)) fail('cada função precisa de um nome');
   }
-  return roles.map((r) => ({ role: text(r.role, 60), count: r.count }));
+  return roles.map((r) => ({ role: text(r.role, 60), count: 1 }));
 }
 
 // Funções cadastradas de cada pessoa. Quem não tem funções cadastradas não é escalado.

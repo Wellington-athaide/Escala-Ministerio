@@ -352,11 +352,9 @@ const toHm = (time) => {
   return `${hours.padStart(2, '0')}:${minutes || '00'}`;
 };
 
+// Uma pessoa por função: "Câmera, Reels" ou uma função por linha.
 function parseRoles(source) {
-  return source.split(/[,\n]/).map((part) => {
-    const [role, count] = part.split(':');
-    return { role: role.trim(), count: Number(count ?? 1) };
-  }).filter((r) => r.role);
+  return source.split(/[,\n]/).map((part) => ({ role: part.trim(), count: 1 })).filter((r) => r.role);
 }
 
 // Cada linha: "domingo 18:00-20:00 Culto de Domingo | Câmera: 2, Som: 1"
@@ -403,8 +401,8 @@ function singleForm() {
       <label>Início <input type="time" id="g-start" value="18:00"></label>
       <label>Término <input type="time" id="g-end" value="20:00"></label>
     </div>
-    <label>Funções (uma por linha: <code>Função: quantidade</code>)
-      <textarea id="g-roles">Câmera: 2\nReels: 1\nProjeção: 2</textarea></label>
+    <label>Funções (uma pessoa por função, separe por vírgula)
+      <textarea id="g-roles">Câmera, Reels, Projeção</textarea></label>
     <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Sugerir equipe</button></div>`;
   $('#g-run').onclick = async () => {
     try {
@@ -428,8 +426,8 @@ function monthForm() {
       <label>Mês <input type="month" id="g-month" value="${nextMonthIso()}"></label>
     </div>
     <label>Cultos recorrentes (um por linha)
-      <textarea id="g-templates" rows="4">domingo 18:00-20:00 Culto de Domingo | Câmera: 2, Reels: 1, Projeção: 2
-quinta 19:30-21:00 Culto de Quinta | Câmera: 1, Projeção: 1</textarea></label>
+      <textarea id="g-templates" rows="4">domingo 18:00-20:00 Culto de Domingo | Câmera, Reels, Projeção
+quinta 19:30-21:00 Culto de Quinta | Câmera, Projeção</textarea></label>
     <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Gerar o mês</button></div>`;
   $('#g-run').onclick = async () => {
     try {
