@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { checkTiming } from './time.js';
 import { DEFAULT_MIN_GAP, findConflicts } from './conflicts.js';
 import { proposeTeam } from './scheduling.js';
@@ -15,6 +14,8 @@ export class ServiceError extends Error {
     this.details = details;
   }
 }
+
+const randomUUID = () => globalThis.crypto.randomUUID();
 
 const fail = (message) => {
   throw new ServiceError(400, message);

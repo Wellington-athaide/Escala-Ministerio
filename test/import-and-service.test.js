@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCsv, parseDate, parseTime, parseImportRows, groupEntries, matchPerson, normalizeText } from '../src/csv-import.js';
 import { checkTiming } from '../src/time.js';
-import { emptyDb } from '../src/store.js';
+import { emptyDb } from '../src/seed.js';
 import * as service from '../src/service.js';
 
 test('CSV com separador ; e campos entre aspas', () => {

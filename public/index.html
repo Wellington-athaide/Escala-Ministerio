@@ -99,6 +99,7 @@
     </div>
   </form>
 </dialog>
+<!--BUNDLE-->
 <script>
 const $ = (sel) => document.querySelector(sel);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -107,6 +108,7 @@ const KIND_LABEL = { escala: 'Escala', indisponibilidade: 'Indisponível', event
 const state = { ministries: [], people: [], tab: 'calendar' };
 
 async function api(method, url, body) {
+  if (window.localApi) return window.localApi(method, url, body);
   const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
