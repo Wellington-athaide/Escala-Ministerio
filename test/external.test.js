@@ -29,10 +29,26 @@ test('lê vários blocos colados e identifica quem está em cada um', () => {
   assert.equal(items[1].start, '19:30');
 });
 
-test('bloco sem horário é ignorado e avisado, não some em silêncio', () => {
-  const { items, report } = parseExternalSchedules('Domingo, 01/11\nRenata', people, { year: 2026 });
-  assert.equal(items.length, 0);
-  assert.match(report[0].ignored, /sem horário/);
+test('bloco sem horário vale o dia inteiro', () => {
+  const { items, report } = parseExternalSchedules('Louvor · 01/11\nRenata', people, { year: 2026 });
+  assert.equal(report[0].allDay, true);
+  assert.equal(items[0].start, '00:00');
+  assert.equal(items[0].endDate, '2026-11-02');
+});
+
+test('gerador exclui quem está no bloco do dia inteiro, em qualquer horário do dia', () => {
+  const db = emptyDb();
+  for (const p of people) db.people.push(p);
+  const result = service.generateMediaTeam(db, {
+    title: 'Culto de Domingo',
+    date: '2026-11-01',
+    start: '19:00',
+    end: '21:00',
+    roles: [{ role: 'Câmera' }],
+    externalText: 'Recepção · 01/11\nRenata',
+  });
+  assert.ok(!result.people.some((p) => p.personId === 'renata'));
+  assert.equal(result.excluded[0].personName, 'Renata Silva');
 });
 
 test('nome de uma pessoa não aparece em outra (palavra inteira)', () => {

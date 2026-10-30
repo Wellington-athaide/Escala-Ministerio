@@ -113,9 +113,9 @@ function generator(view) {
     </div>
     <div id="g-form"></div>
     <label style="margin-top:12px">Escalas dos outros ministérios (cole aqui, uma ou várias)
-      <textarea id="g-external" rows="8" placeholder="Louvor · Domingo, 01/11 · 18h às 20h&#10;Renata&#10;Arthur&#10;&#10;Recepção · Quinta, 05/11 · 19h30 às 21h&#10;Paulo"></textarea>
+      <textarea id="g-external" rows="8" placeholder="Louvor · Domingo, 01/11&#10;Renata&#10;Arthur&#10;&#10;Recepção · Quinta, 05/11&#10;Paulo"></textarea>
     </label>
-    <p class="muted">As pessoas citadas em cada bloco ficam indisponíveis naquele horário. Pode ser o nome completo, o primeiro nome (se for único no cadastro) ou um apelido.</p>
+    <p class="muted">As pessoas citadas em cada bloco ficam indisponíveis naquele dia. Se o bloco tiver horário, vale só nele. Pode ser o nome completo, o primeiro nome (se for único no cadastro) ou um apelido.</p>
     <div class="row"><button class="primary" id="g-run">Gerar sem conflitos</button></div>
     <div id="g-result"></div>`;
   view.querySelectorAll('[name="g-mode"]').forEach((radio) => {
@@ -175,7 +175,7 @@ function showResult(result, isMonth) {
   $('#g-result').innerHTML = `
     <div class="panel">
       <h3>Escalas lidas (${read.length})</h3>
-      ${read.length ? `<ul>${read.map((r) => `<li>${shortDate(r.date)} · ${r.start}–${r.end}${r.estimatedEnd ? ' (término estimado em 2h)' : ''} · ${esc(r.title)}: ${r.names.length ? esc(r.names.join(', ')) : '<span class="muted">nenhum da equipe</span>'}</li>`).join('')}</ul>` : '<p class="muted">Nenhum bloco lido. Confira se as datas e horários foram colados.</p>'}
+      ${read.length ? `<ul>${read.map((r) => `<li>${shortDate(r.date)} · ${r.allDay ? 'dia inteiro' : `${r.start}–${r.end}${r.estimatedEnd ? ' (término estimado em 2h)' : ''}`} · ${esc(r.title)}: ${r.names.length ? esc(r.names.join(', ')) : '<span class="muted">nenhum da equipe</span>'}</li>`).join('')}</ul>` : '<p class="muted">Nenhum bloco lido. Confira se as datas foram coladas.</p>'}
       ${ignored.length ? `<h3 style="margin-top:10px">Ignoradas</h3><ul>${ignored.map((r) => `<li class="error">${esc(r.label)}: ${esc(r.ignored)}</li>`).join('')}</ul>` : ''}
     </div>
     ${withExclusions.length ? `<div class="panel"><h3>Não escalados por outro compromisso</h3><ul>${withExclusions.map((s) => s.excluded.map((e) => `<li>${shortDate(s.slot.date)} ${esc(s.title)}: ${esc(e.personName)} (${e.motivos.map((m) => `${esc(m.other.title)} ${m.other.start}–${m.other.end}`).join(', ')})</li>`).join('')).join('')}</ul></div>` : ''}

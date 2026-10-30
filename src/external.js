@@ -2,8 +2,9 @@ import { normalizeText } from './text.js';
 import { isValidDate } from './time.js';
 
 // Lê escalas de outros ministérios coladas como texto (ex.: copiadas do WhatsApp).
-// Cada data começa um bloco; o bloco vai até a próxima data. Dentro do bloco, o horário
-// e as pessoas são procurados pelo nome. Quem aparece no bloco fica indisponível no horário.
+// Cada data começa um bloco; o bloco vai até a próxima data. As pessoas são procuradas
+// pelo nome. Quem aparece no bloco fica indisponível: no horário, se o bloco tiver um;
+// senão, no dia inteiro.
 
 const DATE_RE = /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/;
 const DATE_RE_G = new RegExp(DATE_RE.source, 'g');
@@ -56,6 +57,13 @@ function findTiming(lines) {
   return null;
 }
 
+// Dia inteiro: das 00:00 de um dia até 00:00 do dia seguinte.
+function allDayOf(date) {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return { start: '00:00', end: '00:00', endDate: next.toISOString().slice(0, 10), allDay: true };
+}
+
 // Nome do evento: o que sobra da linha de data depois de tirar data, horário e dia da semana.
 function titleOf(header) {
   const title = header
@@ -102,19 +110,17 @@ export function parseExternalSchedules(source, people, { year }) {
       report.push({ label, ignored: 'data inválida' });
       continue;
     }
-    const timing = findTiming(block.lines);
-    if (!timing) {
-      report.push({ label, ignored: 'sem horário reconhecível' });
-      continue;
-    }
-
+    // Sem horário no bloco, a escala vale o dia inteiro.
+    const timing = findTiming(block.lines) ?? allDayOf(date);
     const found = peopleIn(block.lines.join(' '), people);
     const title = titleOf(block.header);
     report.push({
       date,
       start: timing.start,
       end: timing.end,
-      estimatedEnd: timing.estimated,
+      endDate: timing.endDate,
+      allDay: timing.allDay ?? false,
+      estimatedEnd: timing.estimated ?? false,
       title,
       names: found.map((p) => p.name),
     });
@@ -127,7 +133,7 @@ export function parseExternalSchedules(source, people, { year }) {
       date,
       start: timing.start,
       end: timing.end,
-      endDate: null,
+      endDate: timing.endDate,
       status: 'confirmada',
       people: found.map((p) => ({ personId: p.id })),
     });

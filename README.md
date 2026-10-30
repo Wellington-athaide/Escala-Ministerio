@@ -27,17 +27,17 @@ Cada função recebe uma pessoa. Uma pessoa pode aparecer em cultos diferentes d
 Pode colar uma ou várias escalas. Cada data começa um bloco, que vai até a próxima data.
 
 ```
-Louvor · Domingo, 01/11 · 18h às 20h
+Louvor · Domingo, 01/11
 Renata
-Artur
+Arthur
 
-Recepção · Quinta, 05/11 · 19h30 às 21h
+Recepção · Quinta, 05/11
 Paulo
 ```
 
 - Nome completo, apelido ou primeiro nome (quando é único no cadastro) são reconhecidos.
-- Bloco sem horário é ignorado e aparece no relatório.
-- Sem horário de término, considera 2 horas e avisa.
+- Horário é opcional. Bloco sem horário vale o dia inteiro.
+- Se o bloco tiver horário, ele vale só nesse horário. Sem término, considera 2 horas e avisa.
 
 ## API
 
