@@ -1,7 +1,7 @@
 import * as service from './service.js';
 import { ServiceError } from './service.js';
 
-const READ_ONLY_POSTS = new Set(['/api/generate', '/api/import/preview']);
+const READ_ONLY_POSTS = new Set(['/api/generate', '/api/generate-month', '/api/import/preview']);
 
 // Tabela de rotas da API. Compartilhada pelo servidor Node e pela versão do navegador.
 export function createRoutes(db) {
@@ -23,6 +23,7 @@ export function createRoutes(db) {
 
     { method: 'GET', path: '/api/conflicts', run: (_p, _b, q) => service.listConflicts(db, Object.fromEntries(q)) },
     { method: 'POST', path: '/api/generate', run: (_p, body) => service.generateMediaTeam(db, body) },
+    { method: 'POST', path: '/api/generate-month', run: (_p, body) => service.generateMonth(db, body) },
     { method: 'POST', path: '/api/import/preview', run: (_p, body) => service.previewImport(db, body.text) },
     { method: 'POST', path: '/api/import/commit', status: 201, run: (_p, body) => service.commitImport(db, body) },
   ].map((route) => ({ ...route, pattern: compile(route.path) }));

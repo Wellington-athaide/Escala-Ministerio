@@ -345,51 +345,150 @@ $('#editor-delete').addEventListener('click', async () => {
 });
 
 // ---------- Gerador da mídia ----------
+const WEEKDAY_NUMBER = { domingo: 0, segunda: 1, 'terça': 2, terca: 2, quarta: 3, quinta: 4, sexta: 5, 'sábado': 6, sabado: 6 };
+
+const toHm = (time) => {
+  const [hours, minutes] = time.toLowerCase().split(/h|:/);
+  return `${hours.padStart(2, '0')}:${minutes || '00'}`;
+};
+
+function parseRoles(source) {
+  return source.split(/[,\n]/).map((part) => {
+    const [role, count] = part.split(':');
+    return { role: role.trim(), count: Number(count ?? 1) };
+  }).filter((r) => r.role);
+}
+
+// Cada linha: "domingo 18:00-20:00 Culto de Domingo | Câmera: 2, Som: 1"
+function parseTemplates(source) {
+  return source.split('\n').map((line) => line.trim()).filter(Boolean).map((line, index) => {
+    const match = line.match(/^(\S+)\s+(\d{1,2}(?::|h)\d{0,2})\s*[-–]\s*(\d{1,2}(?::|h)\d{0,2})\s+(.+?)\s*\|\s*(.+)$/i);
+    if (!match) throw new Error(`linha ${index + 1}: use o formato "domingo 18:00-20:00 Nome do culto | Função: 2, Outra: 1"`);
+    const weekday = WEEKDAY_NUMBER[match[1].toLowerCase()];
+    if (weekday === undefined) throw new Error(`linha ${index + 1}: dia da semana não reconhecido`);
+    return { weekday, start: toHm(match[2]), end: toHm(match[3]), title: match[4].trim(), roles: parseRoles(match[5]) };
+  });
+}
+
+function nextMonthIso() {
+  const date = new Date(`${todayIso()}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  return date.toISOString().slice(0, 7);
+}
+
 function generator(view) {
+  const mode = view.dataset.mode || 'mes';
   view.innerHTML = `
-    <p class="muted">O gerador consulta todas as escalas e indisponibilidades antes de sugerir. Quem tem conflito bloqueante nunca é sugerido.</p>
+    <div class="row">
+      <label><span><input type="radio" name="g-mode" value="culto" ${mode === 'culto' ? 'checked' : ''}> Culto específico</span></label>
+      <label><span><input type="radio" name="g-mode" value="mes" ${mode === 'mes' ? 'checked' : ''}> Mês inteiro</span></label>
+    </div>
+    <p class="muted">O gerador consulta todas as escalas e indisponibilidades antes de sugerir. Quem tem conflito bloqueante nunca é sugerido, e cada culto do mês já considera os anteriores.</p>
+    <div id="g-form"></div>
+    <div id="g-result"></div>`;
+  view.querySelectorAll('[name="g-mode"]').forEach((radio) => {
+    radio.onchange = () => {
+      view.dataset.mode = radio.value;
+      generator(view);
+    };
+  });
+  if (mode === 'culto') singleForm(); else monthForm();
+}
+
+function singleForm() {
+  $('#g-form').innerHTML = `
     <div class="row">
       <label>Nome do culto <input id="g-title" value="Culto de Domingo"></label>
       <label>Data <input type="date" id="g-date" value="${addDays(todayIso(), 7)}"></label>
       <label>Início <input type="time" id="g-start" value="18:00"></label>
       <label>Término <input type="time" id="g-end" value="20:00"></label>
     </div>
-    <label>Funções (uma por linha, no formato <code>Função: quantidade</code>)
+    <label>Funções (uma por linha: <code>Função: quantidade</code>)
       <textarea id="g-roles">Câmera: 2\nSom: 1\nTransmissão: 1</textarea></label>
-    <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Sugerir equipe</button></div>
-    <div id="g-result"></div>`;
+    <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Sugerir equipe</button></div>`;
   $('#g-run').onclick = async () => {
-    const roles = $('#g-roles').value.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-      const [role, count] = line.split(':');
-      return { role: role.trim(), count: Number(count ?? 1) };
-    });
     try {
       const proposal = await api('POST', '/api/generate', {
-        title: $('#g-title').value, date: $('#g-date').value, start: $('#g-start').value, end: $('#g-end').value, roles,
+        title: $('#g-title').value,
+        date: $('#g-date').value,
+        start: $('#g-start').value,
+        end: $('#g-end').value,
+        roles: parseRoles($('#g-roles').value),
       });
-      $('#g-result').innerHTML = `
-        <h3>Sugestão</h3>
-        ${proposal.people.length ? `<table><thead><tr><th>Pessoa</th><th>Função</th></tr></thead><tbody>${proposal.people.map((p) => `<tr><td>${esc(p.personName)}</td><td>${esc(p.role)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém disponível.</p>'}
-        ${proposal.unfilled.map((u) => `<p class="error">Faltam ${u.faltam} para ${esc(u.role)}.</p>`).join('')}
-        ${proposal.excluded.length ? `<h4>Não sugeridos (conflito com escala confirmada ou indisponibilidade)</h4><ul>${proposal.excluded.map((e) => `<li>${esc(e.personName)} — ${e.motivos.map((m) => esc(m.type.replace(/_/g, ' '))).join(', ')}</li>`).join('')}</ul>` : ''}
-        ${proposal.warnings.length ? `<h4>Avisos (conflito com escala provisória)</h4><ul>${proposal.warnings.map((w) => `<li>${esc(w.personName)} — ${esc(w.type.replace(/_/g, ' '))} com ${esc(w.other.title)}</li>`).join('')}</ul>` : ''}
-        <div class="row"><label>Status ao salvar <select id="g-status"><option value="provisoria">Provisória</option><option value="confirmada">Confirmada</option></select></label>
-        <button class="primary" id="g-save" ${proposal.people.length ? '' : 'disabled'}>Salvar como escala da mídia</button></div>
-        <p id="g-msg"></p>`;
-      $('#g-save').onclick = async () => {
-        try {
-          await api('POST', '/api/commitments', {
-            kind: 'escala', ministryId: proposal.ministryId, title: $('#g-title').value,
-            date: $('#g-date').value, start: $('#g-start').value, end: $('#g-end').value,
-            status: $('#g-status').value, people: proposal.people.map((p) => ({ personId: p.personId, role: p.role })),
-          });
-          $('#g-msg').innerHTML = '<span class="ok">Escala salva.</span>';
-        } catch (error) {
-          $('#g-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`;
-        }
-      };
+      showResult({ services: [proposal], month: null, single: true });
     } catch (error) {
       $('#g-result').innerHTML = `<p class="error">${esc(error.message)}</p>`;
+    }
+  };
+}
+
+function monthForm() {
+  $('#g-form').innerHTML = `
+    <div class="row">
+      <label>Mês <input type="month" id="g-month" value="${nextMonthIso()}"></label>
+    </div>
+    <label>Cultos recorrentes (um por linha)
+      <textarea id="g-templates" rows="4">domingo 18:00-20:00 Culto de Domingo | Câmera: 2, Som: 1, Transmissão: 1
+quarta 19:30-21:00 Culto de Quarta | Câmera: 1, Som: 1</textarea></label>
+    <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Gerar o mês</button></div>`;
+  $('#g-run').onclick = async () => {
+    try {
+      const templates = parseTemplates($('#g-templates').value);
+      const result = await api('POST', '/api/generate-month', { month: $('#g-month').value, templates });
+      showResult({ services: result.services, month: result.month, markdown: result.markdown, ministryId: result.ministryId });
+    } catch (error) {
+      $('#g-result').innerHTML = `<p class="error">${esc(error.message)}</p>`;
+    }
+  };
+}
+
+function showResult({ services, month, markdown, ministryId, single }) {
+  const proposalText = markdown ?? services[0]?.markdown ?? '';
+  const withGaps = services.filter((s) => s.unfilled.length).length;
+  const people = new Set(services.flatMap((s) => s.people.map((p) => p.personId))).size;
+  const mediaId = ministryId ?? state.ministries.find((m) => m.isMedia)?.id;
+  $('#g-result').innerHTML = `
+    <h3 style="margin-top:18px">${single ? 'Sugestão' : `${services.length} culto(s) gerados`}</h3>
+    <p class="muted">${people} pessoa(s) escalada(s)${withGaps ? ` · ${withGaps} culto(s) com vaga em aberto` : ''}.</p>
+    <label>Texto para o WhatsApp (copie e cole)
+      <textarea id="g-text" rows="${Math.min(30, proposalText.split('\n').length + 1)}" readonly style="font-family:ui-monospace,monospace;font-size:13px">${esc(proposalText)}</textarea></label>
+    <div class="row" style="margin-top:8px">
+      <button id="g-copy">Copiar texto</button>
+      <label>Status ao salvar <select id="g-status"><option value="provisoria">Provisória</option><option value="confirmada">Confirmada</option></select></label>
+      <button class="primary" id="g-save" ${services.some((s) => s.people.length) ? '' : 'disabled'}>${single ? 'Salvar escala' : 'Salvar todos os cultos'}</button>
+    </div>
+    <p id="g-msg"></p>`;
+
+  const textArea = $('#g-text');
+  $('#g-copy').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(textArea.value);
+      $('#g-msg').innerHTML = '<span class="ok">Texto copiado.</span>';
+    } catch {
+      textArea.select();
+      $('#g-msg').innerHTML = '<span class="muted">Não consegui copiar sozinho. O texto está selecionado: use Ctrl+C.</span>';
+    }
+  };
+  $('#g-save').onclick = async () => {
+    let saved = 0;
+    try {
+      for (const service of services) {
+        if (!service.people.length) continue;
+        await api('POST', '/api/commitments', {
+          kind: 'escala',
+          ministryId: mediaId,
+          title: service.title,
+          date: service.slot.date,
+          start: service.slot.start,
+          end: service.slot.end,
+          status: $('#g-status').value,
+          people: service.people.map((p) => ({ personId: p.personId, role: p.role })),
+        });
+        saved++;
+      }
+      $('#g-msg').innerHTML = `<span class="ok">${saved} escala(s) salva(s).</span>`;
+    } catch (error) {
+      $('#g-msg').innerHTML = `<span class="error">Salvas ${saved} antes do erro: ${esc(error.message)}</span>`;
     }
   };
 }

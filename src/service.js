@@ -1,6 +1,7 @@
 import { checkTiming } from './time.js';
 import { DEFAULT_MIN_GAP, findConflicts } from './conflicts.js';
-import { proposeTeam } from './scheduling.js';
+import { datesOfMonth, planServices } from './planning.js';
+import { toWhatsappText } from './format.js';
 import { groupEntries, matchPerson, normalizeText, parseImportRows } from './csv-import.js';
 
 export const KINDS = ['escala', 'indisponibilidade', 'evento'];
@@ -221,39 +222,86 @@ export function listConflicts(db, { from, to, minGap } = {}) {
 
 // ---------- Gerador de escala da mídia ----------
 
-export function generateMediaTeam(db, input) {
+function requireMedia(db) {
   const media = mediaMinistry(db);
   if (!media) fail('cadastre um ministério marcado como mídia antes de gerar escalas');
+  return media;
+}
 
-  const slot = {
-    date: input.date,
-    start: input.start,
-    end: input.end,
-    endDate: input.endDate || null,
-    ministryId: media.id,
-  };
+function mediaSlot(media, { date, start, end, endDate }) {
+  const slot = { date, start, end, endDate: endDate || null, ministryId: media.id };
   const timingError = checkTiming(slot);
   if (timingError) fail(timingError);
+  return slot;
+}
 
-  const roles = Array.isArray(input.roles) ? input.roles : [];
-  if (!roles.length) fail('informe pelo menos uma função');
+function parseRoles(roles) {
+  if (!Array.isArray(roles) || !roles.length) fail('informe pelo menos uma função');
   for (const r of roles) {
     if (!text(r.role, 60) || !Number.isInteger(r.count) || r.count < 1) fail('cada função precisa de nome e quantidade inteira maior que zero');
   }
+  return roles.map((r) => ({ role: text(r.role, 60), count: r.count }));
+}
 
-  const candidateIds = (input.candidateIds ?? db.people.map((p) => p.id)).filter((id) =>
-    db.people.some((p) => p.id === id),
-  );
+function candidatesFrom(db, input) {
+  return (input.candidateIds ?? db.people.map((p) => p.id)).filter((id) => db.people.some((p) => p.id === id));
+}
 
-  // O gerador lê o calendário de todos os ministérios, não só o da mídia.
-  const result = proposeTeam({ slot, roles, candidateIds, items: db.commitments });
+// Acrescenta os nomes às pessoas, faltas e avisos de um culto planejado.
+function withNames(db, service) {
   const nameOf = (id) => db.people.find((p) => p.id === id)?.name ?? '(removido)';
   return {
+    ...service,
+    people: service.people.map((p) => ({ ...p, personName: nameOf(p.personId) })),
+    excluded: service.excluded.map((e) => ({ ...e, personName: nameOf(e.personId) })),
+    warnings: service.warnings.map((w) => ({ ...w, personName: nameOf(w.personId) })),
+  };
+}
+
+// Gera a equipe de um culto específico. O gerador lê o calendário de todos os ministérios.
+export function generateMediaTeam(db, input) {
+  const media = requireMedia(db);
+  const slot = mediaSlot(media, input);
+  const roles = parseRoles(input.roles);
+  const [planned] = planServices(
+    [{ title: text(input.title, 120) || 'Culto', slot, roles }],
+    { candidateIds: candidatesFrom(db, input), items: db.commitments },
+  );
+  const service = withNames(db, planned);
+  return {
     ministryId: media.id,
-    ...result,
-    people: result.people.map((p) => ({ ...p, personName: nameOf(p.personId) })),
-    excluded: result.excluded.map((e) => ({ ...e, personName: nameOf(e.personId) })),
-    warnings: result.warnings.map((w) => ({ ...w, personName: nameOf(w.personId) })),
+    ...service,
+    markdown: toWhatsappText({ services: [service] }),
+  };
+}
+
+// Gera a escala de um mês inteiro: cada culto recorrente (ex.: todo domingo às 18h) vira um
+// culto por data do mês, planejado em ordem cronológica.
+export function generateMonth(db, input) {
+  const media = requireMedia(db);
+  const month = input.month;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month ?? '')) fail('mês inválido (use AAAA-MM)');
+  const templates = Array.isArray(input.templates) ? input.templates : [];
+  if (!templates.length) fail('informe pelo menos um culto recorrente');
+
+  const requests = [];
+  for (const template of templates) {
+    if (!Number.isInteger(template.weekday) || template.weekday < 0 || template.weekday > 6) fail('dia da semana inválido');
+    const roles = parseRoles(template.roles);
+    const title = text(template.title, 120) || 'Culto';
+    for (const date of datesOfMonth(month, template.weekday)) {
+      requests.push({ title, roles, slot: mediaSlot(media, { date, start: template.start, end: template.end }) });
+    }
+  }
+  requests.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
+
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items: db.commitments });
+  const services = planned.map((service) => withNames(db, service));
+  return {
+    month,
+    ministryId: media.id,
+    services,
+    markdown: toWhatsappText({ month, services }),
   };
 }
 
