@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Escalas da Igreja</title>
+<style>
+  :root { --bg:#f8fafc; --fg:#0f172a; --muted:#64748b; --line:#e2e8f0; --card:#ffffff; --accent:#2563eb; --bad:#dc2626; --warn:#d97706; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#0b1120; --fg:#e2e8f0; --muted:#94a3b8; --line:#1e293b; --card:#111827; --accent:#60a5fa; --bad:#f87171; --warn:#fbbf24; }
+  }
+  :root[data-theme="dark"] { --bg:#0b1120; --fg:#e2e8f0; --muted:#94a3b8; --line:#1e293b; --card:#111827; --accent:#60a5fa; --bad:#f87171; --warn:#fbbf24; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 15px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:18px; margin:0 16px 0 0; }
+  nav button { margin:2px; }
+  main { padding:16px; max-width:1100px; margin:0 auto; }
+  button { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.danger { color:var(--bad); }
+  button.active { border-color:var(--accent); color:var(--accent); }
+  input, select, textarea { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); max-width:100%; }
+  textarea { width:100%; min-height:120px; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-left:6px solid var(--muted); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .day { margin:18px 0 6px; font-weight:600; }
+  .muted { color:var(--muted); font-size:13px; }
+  .badge { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; border:1px solid var(--line); margin-left:6px; }
+  .badge.prov { color:var(--warn); border-color:var(--warn); }
+  .badge.bad { color:var(--bad); border-color:var(--bad); }
+  table { width:100%; border-collapse:collapse; background:var(--card); }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; font-size:14px; }
+  .error { color:var(--bad); margin:8px 0; }
+  .ok { color:#16a34a; margin:8px 0; }
+  dialog { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:10px; width:min(640px, calc(100vw - 32px)); }
+  dialog::backdrop { background:rgba(15,23,42,.5); }
+  .people-row { display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  @media (max-width: 600px) { main { padding:12px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Escalas da Igreja</h1>
+  <nav id="nav">
+    <button data-tab="calendar">Calendário</button>
+    <button data-tab="conflicts">Conflitos</button>
+    <button data-tab="schedules">Escalas</button>
+    <button data-tab="generator">Gerador da mídia</button>
+    <button data-tab="import">Importar</button>
+    <button data-tab="registry">Cadastros</button>
+  </nav>
+</header>
+<main id="view"></main>
+<dialog id="editor">
+  <form id="editor-form" method="dialog" style="display:flex;flex-direction:column;gap:10px">
+    <h2 id="editor-title" style="margin:0;font-size:18px"></h2>
+    <div class="row">
+      <label>Tipo
+        <select name="kind">
+          <option value="escala">Escala</option>
+          <option value="indisponibilidade">Indisponibilidade</option>
+          <option value="evento">Evento da igreja</option>
+        </select>
+      </label>
+      <label>Ministério
+        <select name="ministryId"></select>
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="confirmada">Confirmada</option>
+          <option value="provisoria">Provisória</option>
+        </select>
+      </label>
+    </div>
+    <label>Nome do evento ou culto <input name="title" required maxlength="120"></label>
+    <div class="row">
+      <label>Data <input type="date" name="date" required></label>
+      <label>Início <input type="time" name="start" required></label>
+      <label>Término <input type="time" name="end" required></label>
+      <label>Data de término (se for outro dia) <input type="date" name="endDate"></label>
+    </div>
+    <div>
+      <strong>Pessoas</strong>
+      <div id="editor-people"></div>
+      <button type="button" id="add-person">+ Adicionar pessoa</button>
+    </div>
+    <label>Observações <textarea name="notes" rows="2" maxlength="1000"></textarea></label>
+    <p id="editor-error" class="error"></p>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" class="danger" id="editor-delete">Remover</button>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="editor-cancel">Cancelar</button>
+        <button type="button" class="primary" id="editor-save">Salvar</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+<script>
+const $ = (sel) => document.querySelector(sel);
+const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const KIND_LABEL = { escala: 'Escala', indisponibilidade: 'Indisponível', evento: 'Evento' };
+
+const state = { ministries: [], people: [], tab: 'calendar' };
+
+async function api(method, url, body) {
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `erro ${res.status}`);
+  return data;
+}
+
+const ministryOf = (id) => state.ministries.find((m) => m.id === id);
+const nameOfPerson = (id) => state.people.find((p) => p.id === id)?.name ?? '(removido)';
+const colorOf = (item) => (item.kind === 'indisponibilidade' ? '#94a3b8' : ministryOf(item.ministryId)?.color ?? '#64748b');
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const formatDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', timeZone: 'UTC' });
+
+async function loadBase() {
+  [state.ministries, state.people] = await Promise.all([api('GET', '/api/ministries'), api('GET', '/api/people')]);
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  render();
+}
+
+async function render() {
+  const view = $('#view');
+  const renderers = { calendar, conflicts, schedules, generator, import: importView, registry };
+  await renderers[state.tab](view);
+}
+
+// ---------- Calendário ----------
+async function calendar(view) {
+  const from = view.dataset.from || todayIso();
+  const to = view.dataset.to || addDays(from, 30);
+  view.innerHTML = `
+    <div class="row">
+      <label>De <input type="date" id="f-from" value="${from}"></label>
+      <label>Até <input type="date" id="f-to" value="${to}"></label>
+      <label>Ministério <select id="f-ministry"><option value="">Todos</option>${state.ministries.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label>
+      <label>Pessoa <select id="f-person"><option value="">Todas</option>${state.people.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>
+      <label>Tipo <select id="f-type">
+        <option value="">Todos</option><option value="media">Escalas da mídia</option><option value="externa">Escalas dos demais ministérios</option>
+        <option value="indisponibilidade">Indisponibilidades</option><option value="evento">Eventos da igreja</option></select></label>
+    </div>
+    <div id="cal-list"></div>`;
+  const refresh = () => {
+    view.dataset.from = $('#f-from').value;
+    view.dataset.to = $('#f-to').value;
+    loadCalendar();
+  };
+  ['#f-from', '#f-to', '#f-ministry', '#f-person', '#f-type'].forEach((s) => $(s).addEventListener('change', refresh));
+
+  async function loadCalendar() {
+    const params = new URLSearchParams({ from: $('#f-from').value, to: $('#f-to').value });
+    if ($('#f-ministry').value) params.set('ministryId', $('#f-ministry').value);
+    if ($('#f-person').value) params.set('personId', $('#f-person').value);
+    const type = $('#f-type').value;
+    if (type === 'media' || type === 'externa') params.set('source', type);
+    if (type === 'indisponibilidade' || type === 'evento') params.set('kind', type);
+    const items = await api('GET', `/api/commitments?${params}`);
+    const media = state.ministries.find((m) => m.isMedia)?.id;
+    const shown = type === 'media' ? items.filter((i) => i.ministryId === media || i.kind !== 'escala') : items;
+    let html = '';
+    let lastDay = '';
+    for (const item of shown) {
+      if (item.date !== lastDay) {
+        html += `<div class="day">${formatDate(item.date)}</div>`;
+        lastDay = item.date;
+      }
+      const people = (item.people ?? []).map((p) => `${esc(nameOfPerson(p.personId))}${p.role ? ` <span class="muted">(${esc(p.role)})</span>` : ''}`).join(', ');
+      const range = `${item.start}–${item.end}${item.endDate ? ` (até ${formatDate(item.endDate)})` : ''}`;
+      html += `<div class="card" style="border-left-color:${colorOf(item)}">
+        <strong>${esc(item.title)}</strong>
+        <span class="muted"> · ${range} · ${esc(ministryOf(item.ministryId)?.name ?? KIND_LABEL[item.kind])}</span>
+        ${item.status === 'provisoria' ? '<span class="badge prov">provisória</span>' : ''}
+        <div>${people || '<span class="muted">sem pessoas</span>'}</div>
+        ${item.notes ? `<div class="muted">${esc(item.notes)}</div>` : ''}
+        <div style="margin-top:6px"><button data-edit="${item.id}">Editar</button></div>
+      </div>`;
+    }
+    $('#cal-list').innerHTML = html || '<p class="muted">Nenhum compromisso no período.</p>';
+  }
+  view.onclick = (event) => {
+    const id = event.target.dataset.edit;
+    if (id) openEditor(id, () => loadCalendar());
+  };
+  loadCalendar();
+}
+
+// ---------- Conflitos ----------
+async function conflicts(view) {
+  const from = todayIso();
+  const to = addDays(from, 60);
+  view.innerHTML = `
+    <div class="row">
+      <label>De <input type="date" id="c-from" value="${from}"></label>
+      <label>Até <input type="date" id="c-to" value="${to}"></label>
+      <label>Intervalo mínimo (min) <input type="number" id="c-gap" value="60" min="0" style="width:110px"></label>
+      <button id="c-refresh">Atualizar</button>
+    </div>
+    <div id="c-list"></div>`;
+  const load = async () => {
+    const params = new URLSearchParams({ from: $('#c-from').value, to: $('#c-to').value, minGap: $('#c-gap').value });
+    const list = await api('GET', `/api/conflicts?${params}`);
+    const label = { mesmo_horario: 'Mesmo horário', sobreposicao_parcial: 'Sobreposição parcial', intervalo_insuficiente: 'Intervalo insuficiente', indisponivel: 'Indisponível' };
+    $('#c-list').innerHTML = list.length
+      ? `<table><thead><tr><th>Pessoa</th><th>Primeiro compromisso</th><th>Segundo compromisso</th><th>Data e horário</th><th>Tipo</th><th></th></tr></thead><tbody>
+        ${list.map((c, i) => `<tr>
+          <td>${esc(c.personName)}<div class="muted">${c.severity === 'bloqueante' ? '<span class="badge bad">bloqueante</span>' : '<span class="badge prov">atenção</span>'}${c.crossMinistry ? ' <span class="badge">entre ministérios</span>' : ''}</div></td>
+          <td>${esc(c.first.title)}<div class="muted">${esc(c.first.ministryName ?? KIND_LABEL[c.first.kind])} · ${c.first.start}–${c.first.end}</div></td>
+          <td>${esc(c.second.title)}<div class="muted">${esc(c.second.ministryName ?? KIND_LABEL[c.second.kind])} · ${c.second.start}–${c.second.end}</div></td>
+          <td>${c.date}${c.gapMinutes !== null ? `<div class="muted">intervalo: ${c.gapMinutes} min</div>` : ''}</td>
+          <td>${label[c.type]}</td>
+          <td><button data-resolve="${c.first.commitmentId}">Resolver 1º</button> <button data-resolve="${c.second.commitmentId}">Resolver 2º</button></td>
+        </tr>`).join('')}
+      </tbody></table>`
+      : '<p class="ok">Nenhum conflito no período.</p>';
+  };
+  view.onclick = (event) => {
+    const id = event.target.dataset.resolve;
+    if (id) openEditor(id, load);
+    if (event.target.id === 'c-refresh') load();
+  };
+  load();
+}
+
+// ---------- Escalas (cadastro manual) ----------
+async function schedules(view) {
+  const items = await api('GET', '/api/commitments?');
+  view.innerHTML = `
+    <div class="row">
+      <button class="primary" data-new="escala">Nova escala</button>
+      <button data-new="indisponibilidade">Nova indisponibilidade</button>
+      <button data-new="evento">Novo evento da igreja</button>
+    </div>
+    ${items.map((item) => `<div class="card" style="border-left-color:${colorOf(item)}">
+      <strong>${esc(item.title)}</strong> <span class="muted">${item.date} · ${item.start}–${item.end} · ${esc(ministryOf(item.ministryId)?.name ?? KIND_LABEL[item.kind])}</span>
+      ${item.status === 'provisoria' ? '<span class="badge prov">provisória</span>' : ''}
+      <div>${(item.people ?? []).map((p) => esc(nameOfPerson(p.personId))).join(', ') || '<span class="muted">sem pessoas</span>'}</div>
+      <button data-edit="${item.id}" style="margin-top:6px">Editar</button>
+    </div>`).join('') || '<p class="muted">Nenhuma escala cadastrada.</p>'}`;
+  view.onclick = (event) => {
+    const { edit, new: kind } = event.target.dataset;
+    if (edit) openEditor(edit, () => setTab('schedules'));
+    if (kind) openEditor(null, () => setTab('schedules'), { kind });
+  };
+}
+
+// ---------- Editor de compromisso ----------
+let editing = null;
+
+async function openEditor(id, onSaved, presets = {}) {
+  const form = $('#editor-form');
+  const dlg = $('#editor');
+  let item = { kind: presets.kind ?? 'escala', status: 'confirmada', people: [] };
+  if (id) item = (await api('GET', `/api/commitments?`)).find((c) => c.id === id) ?? item;
+  editing = { id, onSaved };
+  $('#editor-title').textContent = id ? 'Editar compromisso' : 'Novo compromisso';
+  $('#editor-error').textContent = '';
+  $('#editor-delete').style.visibility = id ? 'visible' : 'hidden';
+
+  form.elements.kind.value = item.kind;
+  form.elements.ministryId.innerHTML = `<option value="">—</option>${state.ministries.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}`;
+  form.elements.ministryId.value = item.ministryId ?? '';
+  form.elements.status.value = item.status ?? 'confirmada';
+  form.elements.title.value = item.title ?? '';
+  form.elements.date.value = item.date ?? todayIso();
+  form.elements.start.value = item.start ?? '18:00';
+  form.elements.end.value = item.end ?? '20:00';
+  form.elements.endDate.value = item.endDate ?? '';
+  form.elements.notes.value = item.notes ?? '';
+  $('#editor-people').innerHTML = '';
+  (item.people ?? []).forEach((p) => addPersonRow(p.personId, p.role));
+  if (!item.people?.length && item.kind !== 'evento') addPersonRow();
+  dlg.showModal();
+}
+
+function addPersonRow(personId = '', role = '') {
+  const row = document.createElement('div');
+  row.className = 'people-row';
+  row.innerHTML = `<select data-person>${state.people.map((p) => `<option value="${p.id}" ${p.id === personId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <input data-role placeholder="Função" value="${esc(role)}" style="width:160px">
+    <button type="button" class="danger" data-remove>×</button>`;
+  $('#editor-people').appendChild(row);
+}
+
+function collectEditor() {
+  const form = $('#editor-form');
+  const people = [...document.querySelectorAll('#editor-people .people-row')].map((row) => ({
+    personId: row.querySelector('[data-person]').value,
+    role: row.querySelector('[data-role]').value.trim(),
+  }));
+  const kind = form.elements.kind.value;
+  return {
+    kind,
+    ministryId: kind === 'indisponibilidade' ? null : form.elements.ministryId.value || null,
+    status: form.elements.status.value,
+    title: form.elements.title.value.trim(),
+    date: form.elements.date.value,
+    start: form.elements.start.value,
+    end: form.elements.end.value,
+    endDate: form.elements.endDate.value || null,
+    notes: form.elements.notes.value.trim(),
+    people,
+  };
+}
+
+$('#add-person').addEventListener('click', () => addPersonRow());
+$('#editor-people').addEventListener('click', (event) => {
+  if (event.target.dataset.remove !== undefined) event.target.parentElement.remove();
+});
+$('#editor-cancel').addEventListener('click', () => $('#editor').close());
+$('#editor-save').addEventListener('click', async () => {
+  try {
+    const body = collectEditor();
+    if (body.kind === 'indisponibilidade') body.people = body.people.slice(0, 1);
+    if (editing.id) await api('PUT', `/api/commitments/${editing.id}`, body);
+    else await api('POST', '/api/commitments', body);
+    $('#editor').close();
+    editing.onSaved?.();
+  } catch (error) {
+    $('#editor-error').textContent = error.message;
+  }
+});
+$('#editor-delete').addEventListener('click', async () => {
+  if (!editing.id || !confirm('Remover este compromisso? Escalas de outros ministérios não são afetadas.')) return;
+  try {
+    await api('DELETE', `/api/commitments/${editing.id}`);
+    $('#editor').close();
+    editing.onSaved?.();
+  } catch (error) {
+    $('#editor-error').textContent = error.message;
+  }
+});
+
+// ---------- Gerador da mídia ----------
+function generator(view) {
+  view.innerHTML = `
+    <p class="muted">O gerador consulta todas as escalas e indisponibilidades antes de sugerir. Quem tem conflito bloqueante nunca é sugerido.</p>
+    <div class="row">
+      <label>Nome do culto <input id="g-title" value="Culto de Domingo"></label>
+      <label>Data <input type="date" id="g-date" value="${addDays(todayIso(), 7)}"></label>
+      <label>Início <input type="time" id="g-start" value="18:00"></label>
+      <label>Término <input type="time" id="g-end" value="20:00"></label>
+    </div>
+    <label>Funções (uma por linha, no formato <code>Função: quantidade</code>)
+      <textarea id="g-roles">Câmera: 2\nSom: 1\nTransmissão: 1</textarea></label>
+    <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Sugerir equipe</button></div>
+    <div id="g-result"></div>`;
+  $('#g-run').onclick = async () => {
+    const roles = $('#g-roles').value.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
+      const [role, count] = line.split(':');
+      return { role: role.trim(), count: Number(count ?? 1) };
+    });
+    try {
+      const proposal = await api('POST', '/api/generate', {
+        title: $('#g-title').value, date: $('#g-date').value, start: $('#g-start').value, end: $('#g-end').value, roles,
+      });
+      $('#g-result').innerHTML = `
+        <h3>Sugestão</h3>
+        ${proposal.people.length ? `<table><thead><tr><th>Pessoa</th><th>Função</th></tr></thead><tbody>${proposal.people.map((p) => `<tr><td>${esc(p.personName)}</td><td>${esc(p.role)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém disponível.</p>'}
+        ${proposal.unfilled.map((u) => `<p class="error">Faltam ${u.faltam} para ${esc(u.role)}.</p>`).join('')}
+        ${proposal.excluded.length ? `<h4>Não sugeridos (conflito com escala confirmada ou indisponibilidade)</h4><ul>${proposal.excluded.map((e) => `<li>${esc(e.personName)} — ${e.motivos.map((m) => esc(m.type.replace(/_/g, ' '))).join(', ')}</li>`).join('')}</ul>` : ''}
+        ${proposal.warnings.length ? `<h4>Avisos (conflito com escala provisória)</h4><ul>${proposal.warnings.map((w) => `<li>${esc(w.personName)} — ${esc(w.type.replace(/_/g, ' '))} com ${esc(w.other.title)}</li>`).join('')}</ul>` : ''}
+        <div class="row"><label>Status ao salvar <select id="g-status"><option value="provisoria">Provisória</option><option value="confirmada">Confirmada</option></select></label>
+        <button class="primary" id="g-save" ${proposal.people.length ? '' : 'disabled'}>Salvar como escala da mídia</button></div>
+        <p id="g-msg"></p>`;
+      $('#g-save').onclick = async () => {
+        try {
+          await api('POST', '/api/commitments', {
+            kind: 'escala', ministryId: proposal.ministryId, title: $('#g-title').value,
+            date: $('#g-date').value, start: $('#g-start').value, end: $('#g-end').value,
+            status: $('#g-status').value, people: proposal.people.map((p) => ({ personId: p.personId, role: p.role })),
+          });
+          $('#g-msg').innerHTML = '<span class="ok">Escala salva.</span>';
+        } catch (error) {
+          $('#g-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`;
+        }
+      };
+    } catch (error) {
+      $('#g-result').innerHTML = `<p class="error">${esc(error.message)}</p>`;
+    }
+  };
+}
+
+// ---------- Importação ----------
+let importDrafts = [];
+function importView(view) {
+  view.innerHTML = `
+    <p class="muted">Colunas: Ministério; Evento; Data; Início; Fim; Pessoa; Função (opcional); Status (opcional: confirmada ou provisória); Observações (opcional). Uma linha por pessoa.</p>
+    <div class="row"><input type="file" id="i-file" accept=".csv,text/csv"></div>
+    <textarea id="i-text" placeholder="Ou cole o conteúdo do CSV aqui"></textarea>
+    <div class="row" style="margin-top:10px"><button class="primary" id="i-analyze">Analisar arquivo</button></div>
+    <div id="i-result"></div>`;
+  $('#i-file').onchange = async (event) => {
+    const file = event.target.files[0];
+    if (file) $('#i-text').value = await file.text();
+  };
+  $('#i-analyze').onclick = analyze;
+}
+
+async function analyze() {
+  const out = $('#i-result');
+  try {
+    const { drafts, errors } = await api('POST', '/api/import/preview', { text: $('#i-text').value });
+    importDrafts = drafts;
+    out.innerHTML = `
+      ${errors.length ? `<h4>Linhas com erro (não serão importadas)</h4><ul>${errors.map((e) => `<li class="error">Linha ${e.line}: ${esc(e.message)}</li>`).join('')}</ul>` : ''}
+      <h3>Conferência (${drafts.length} escala(s))</h3>
+      ${drafts.map((d, i) => `<div class="card">
+        <strong>${esc(d.title)}</strong> <span class="muted">${esc(d.ministryName)}${d.ministryId ? '' : ' (novo ministério)'} · ${d.date} · ${d.start}–${d.end}</span>
+        ${d.status === 'provisoria' ? '<span class="badge prov">provisória</span>' : ''}
+        <table style="margin-top:6px"><thead><tr><th>Nome no arquivo</th><th>Função</th><th>Vincular a</th></tr></thead><tbody>
+        ${d.people.map((p, j) => {
+          const options = [
+            `<option value="">Novo cadastro</option>`,
+            ...state.people.filter((x) => x.id === p.personId || p.suggestions.some((s) => s.personId === x.id)).map((x) => `<option value="${x.id}" ${x.id === p.personId ? 'selected' : ''}>${esc(x.name)}</option>`),
+            ...state.people.filter((x) => x.id !== p.personId && !p.suggestions.some((s) => s.personId === x.id)).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`),
+          ];
+          const hint = p.personId ? '<span class="muted"> (cadastrado)</span>' : p.suggestions.length ? '<span class="muted"> (sugerido: confira)</span>' : '<span class="muted"> (sem correspondência)</span>';
+          return `<tr><td>${esc(p.name)}${hint}</td><td>${esc(p.role)}</td><td><select data-draft="${i}" data-person="${j}">${options.join('')}</select></td></tr>`;
+        }).join('')}
+        </tbody></table>
+      </div>`).join('')}
+      ${drafts.length ? `<button class="primary" id="i-commit">Confirmar importação</button>` : ''}
+      <p id="i-msg"></p>`;
+    if (drafts.length) {
+      out.querySelector('#i-commit').onclick = commitImport;
+      // Sugestões com nome exato já vêm pré-selecionadas; sugestões aproximadas usam a melhor opção.
+      importDrafts.forEach((d) => d.people.forEach((p) => { if (!p.personId && p.suggestions.length) p.personId = p.suggestions[0].personId; }));
+      importDrafts.forEach((d, i) => d.people.forEach((p, j) => {
+        const select = out.querySelector(`select[data-draft="${i}"][data-person="${j}"]`);
+        if (p.personId) select.value = p.personId;
+      }));
+    }
+  } catch (error) {
+    out.innerHTML = `<p class="error">${esc(error.message)}</p>`;
+  }
+}
+
+async function commitImport() {
+  const commitments = importDrafts.map((d, i) => ({
+    ministryName: d.ministryName,
+    title: d.title,
+    date: d.date,
+    start: d.start,
+    end: d.end,
+    status: d.status,
+    notes: d.notes,
+    people: d.people.map((p, j) => {
+      const select = document.querySelector(`select[data-draft="${i}"][data-person="${j}"]`);
+      return { name: p.name, role: p.role, personId: select.value || null };
+    }),
+  }));
+  try {
+    const result = await api('POST', '/api/import/commit', { commitments });
+    await loadBase();
+    $('#i-msg').innerHTML = `<span class="ok">Importado: ${result.commitments} escala(s), ${result.people} pessoa(s) nova(s), ${result.ministries} ministério(s) novo(s).</span>`;
+  } catch (error) {
+    $('#i-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`;
+  }
+}
+
+// ---------- Cadastros ----------
+async function registry(view) {
+  const [ministries, people] = await Promise.all([api('GET', '/api/ministries'), api('GET', '/api/people')]);
+  state.ministries = ministries;
+  state.people = people;
+  view.innerHTML = `
+    <h2>Ministérios e setores</h2>
+    <form id="m-new" class="row"><input name="name" placeholder="Novo ministério" required><label><span><input type="checkbox" name="isMedia"> é a mídia</span></label><button class="primary">Adicionar</button></form>
+    ${ministries.map((m) => `<div class="row" data-ministry="${m.id}">
+      <input type="color" value="${m.color}" data-field="color">
+      <input value="${esc(m.name)}" data-field="name">
+      <label><span><input type="checkbox" data-field="isMedia" ${m.isMedia ? 'checked' : ''}> mídia</span></label>
+      <button data-save-ministry>Salvar</button><button class="danger" data-del-ministry>Remover</button></div>`).join('')}
+    <h2 style="margin-top:24px">Pessoas (cadastro único)</h2>
+    <form id="p-new" class="row"><input name="name" placeholder="Nome completo" required><input name="aliases" placeholder="Apelidos ou grafias (separe por vírgula)"><button class="primary">Adicionar</button></form>
+    ${people.map((p) => `<div class="row" data-person="${p.id}">
+      <input value="${esc(p.name)}" data-field="name" style="min-width:220px">
+      <input value="${esc((p.aliases ?? []).join(', '))}" data-field="aliases" placeholder="Apelidos" style="min-width:220px">
+      <button data-save-person>Salvar</button><button class="danger" data-del-person>Remover</button></div>`).join('') || '<p class="muted">Nenhuma pessoa cadastrada.</p>'}
+    <p id="r-msg"></p>`;
+
+  const report = (promise) => promise.then(() => setTab('registry')).catch((error) => { $('#r-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`; });
+  view.querySelector('#m-new').onsubmit = (event) => {
+    event.preventDefault();
+    const f = event.target;
+    report(api('POST', '/api/ministries', { name: f.name.value, isMedia: f.isMedia.checked }));
+  };
+  view.querySelector('#p-new').onsubmit = (event) => {
+    event.preventDefault();
+    const f = event.target;
+    report(api('POST', '/api/people', { name: f.name.value, aliases: f.aliases.value.split(',').map((s) => s.trim()).filter(Boolean) }));
+  };
+  view.onclick = (event) => {
+    const t = event.target;
+    const ministryRow = t.closest('[data-ministry]');
+    const personRow = t.closest('[data-person]');
+    if (ministryRow && t.hasAttribute('data-save-ministry')) {
+      report(api('PUT', `/api/ministries/${ministryRow.dataset.ministry}`, {
+        name: ministryRow.querySelector('[data-field="name"]').value,
+        color: ministryRow.querySelector('[data-field="color"]').value,
+        isMedia: ministryRow.querySelector('[data-field="isMedia"]').checked,
+      }));
+    }
+    if (ministryRow && t.hasAttribute('data-del-ministry') && confirm('Remover ministério?')) report(api('DELETE', `/api/ministries/${ministryRow.dataset.ministry}`));
+    if (personRow && t.hasAttribute('data-save-person')) {
+      report(api('PUT', `/api/people/${personRow.dataset.person}`, {
+        name: personRow.querySelector('[data-field="name"]').value,
+        aliases: personRow.querySelector('[data-field="aliases"]').value.split(',').map((s) => s.trim()).filter(Boolean),
+      }));
+    }
+    if (personRow && t.hasAttribute('data-del-person') && confirm('Remover pessoa?')) report(api('DELETE', `/api/people/${personRow.dataset.person}`));
+  };
+}
+
+document.getElementById('nav').addEventListener('click', (event) => {
+  if (event.target.dataset.tab) setTab(event.target.dataset.tab);
+});
+
+(async () => {
+  await loadBase();
+  setTab('calendar');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "escala-ministerio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Módulo Escalas da Igreja: escalas de todos os ministérios com detecção de conflitos",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test test/*.test.js"
+  }
+}
