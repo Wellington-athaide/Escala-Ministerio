@@ -404,7 +404,7 @@ function singleForm() {
       <label>Término <input type="time" id="g-end" value="20:00"></label>
     </div>
     <label>Funções (uma por linha: <code>Função: quantidade</code>)
-      <textarea id="g-roles">Câmera: 2\nSom: 1\nTransmissão: 1</textarea></label>
+      <textarea id="g-roles">Câmera: 2\nReels: 1\nProjeção: 2</textarea></label>
     <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Sugerir equipe</button></div>`;
   $('#g-run').onclick = async () => {
     try {
@@ -428,8 +428,8 @@ function monthForm() {
       <label>Mês <input type="month" id="g-month" value="${nextMonthIso()}"></label>
     </div>
     <label>Cultos recorrentes (um por linha)
-      <textarea id="g-templates" rows="4">domingo 18:00-20:00 Culto de Domingo | Câmera: 2, Som: 1, Transmissão: 1
-quarta 19:30-21:00 Culto de Quarta | Câmera: 1, Som: 1</textarea></label>
+      <textarea id="g-templates" rows="4">domingo 18:00-20:00 Culto de Domingo | Câmera: 2, Reels: 1, Projeção: 2
+quarta 19:30-21:00 Culto de Quarta | Câmera: 1, Projeção: 1</textarea></label>
     <div class="row" style="margin-top:10px"><button class="primary" id="g-run">Gerar o mês</button></div>`;
   $('#g-run').onclick = async () => {
     try {
@@ -572,6 +572,19 @@ async function commitImport() {
 }
 
 // ---------- Cadastros ----------
+const norm = (value) => String(value).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const splitList = (value) => value.split(',').map((s) => s.trim()).filter(Boolean);
+
+const MEMBERS_TEXT = `Renata - Câmera, Reels
+Duda - Câmera, Reels
+Arthur - Câmera, Reels
+Kaique - Câmera
+Maely - Câmera, Reels
+Myca - Câmera, Reels
+Paulo - Projeção
+Jakeline - Projeção
+Eu - tudo`;
+
 async function registry(view) {
   const [ministries, people] = await Promise.all([api('GET', '/api/ministries'), api('GET', '/api/people')]);
   state.ministries = ministries;
@@ -584,15 +597,25 @@ async function registry(view) {
       <input value="${esc(m.name)}" data-field="name">
       <label><span><input type="checkbox" data-field="isMedia" ${m.isMedia ? 'checked' : ''}> mídia</span></label>
       <button data-save-ministry>Salvar</button><button class="danger" data-del-ministry>Remover</button></div>`).join('')}
-    <h2 style="margin-top:24px">Pessoas (cadastro único)</h2>
-    <form id="p-new" class="row"><input name="name" placeholder="Nome completo" required><input name="aliases" placeholder="Apelidos ou grafias (separe por vírgula)"><button class="primary">Adicionar</button></form>
-    ${people.map((p) => `<div class="row" data-person="${p.id}">
-      <input value="${esc(p.name)}" data-field="name" style="min-width:220px">
-      <input value="${esc((p.aliases ?? []).join(', '))}" data-field="aliases" placeholder="Apelidos" style="min-width:220px">
-      <button data-save-person>Salvar</button><button class="danger" data-del-person>Remover</button></div>`).join('') || '<p class="muted">Nenhuma pessoa cadastrada.</p>'}
-    <p id="r-msg"></p>`;
 
-  const report = (promise) => promise.then(() => setTab('registry')).catch((error) => { $('#r-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`; });
+    <h2 style="margin-top:24px">Membros e funções</h2>
+    <p class="muted">Cada pessoa só é escalada nas funções que ela faz. "tudo" vale para qualquer função, e a pessoa entra como reserva.</p>
+    <label>Um por linha: <code>Nome - função, função</code>. Quem já existe é atualizado.
+      <textarea id="p-bulk" rows="9">${esc(MEMBERS_TEXT)}</textarea></label>
+    <div class="row" style="margin-top:8px"><button class="primary" id="p-bulk-run">Cadastrar membros</button></div>
+
+    <h3>Pessoas cadastradas</h3>
+    <form id="p-new" class="row"><input name="name" placeholder="Nome" required><input name="skills" placeholder="Funções (ex.: Câmera, Reels)"><button class="primary">Adicionar</button></form>
+    ${people.map((p) => `<div class="row" data-person="${p.id}">
+      <input value="${esc(p.name)}" data-field="name" style="min-width:160px">
+      <input value="${esc((p.skills ?? []).join(', '))}" data-field="skills" placeholder="Funções" style="min-width:220px">
+      <button data-save-person>Salvar</button><button class="danger" data-del-person>Remover</button></div>`).join('') || '<p class="muted">Nenhuma pessoa cadastrada.</p>'}
+    <p id="r-msg">${state.flash ?? ''}</p>`;
+  state.flash = null;
+
+  const report = (promise) => promise.then(() => setTab('registry')).catch((error) => {
+    $('#r-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`;
+  });
   view.querySelector('#m-new').onsubmit = (event) => {
     event.preventDefault();
     const f = event.target;
@@ -601,7 +624,30 @@ async function registry(view) {
   view.querySelector('#p-new').onsubmit = (event) => {
     event.preventDefault();
     const f = event.target;
-    report(api('POST', '/api/people', { name: f.name.value, aliases: f.aliases.value.split(',').map((s) => s.trim()).filter(Boolean) }));
+    report(api('POST', '/api/people', { name: f.name.value, skills: splitList(f.skills.value) }));
+  };
+  view.querySelector('#p-bulk-run').onclick = async () => {
+    try {
+      const current = await api('GET', '/api/people');
+      let created = 0;
+      let updated = 0;
+      for (const line of $('#p-bulk').value.split('\n').map((l) => l.trim()).filter(Boolean)) {
+        const [name, ...rest] = line.split(' - ');
+        const skills = splitList(rest.join(' - '));
+        const existing = current.find((p) => norm(p.name) === norm(name));
+        if (existing) {
+          await api('PUT', `/api/people/${existing.id}`, { name: existing.name, aliases: existing.aliases ?? [], skills });
+          updated++;
+        } else {
+          current.push(await api('POST', '/api/people', { name: name.trim(), skills }));
+          created++;
+        }
+      }
+      state.flash = `<span class="ok">${created} cadastrada(s), ${updated} atualizada(s).</span>`;
+      setTab('registry');
+    } catch (error) {
+      $('#r-msg').innerHTML = `<span class="error">${esc(error.message)}</span>`;
+    }
   };
   view.onclick = (event) => {
     const t = event.target;
@@ -616,9 +662,11 @@ async function registry(view) {
     }
     if (ministryRow && t.hasAttribute('data-del-ministry') && confirm('Remover ministério?')) report(api('DELETE', `/api/ministries/${ministryRow.dataset.ministry}`));
     if (personRow && t.hasAttribute('data-save-person')) {
+      const person = state.people.find((p) => p.id === personRow.dataset.person);
       report(api('PUT', `/api/people/${personRow.dataset.person}`, {
         name: personRow.querySelector('[data-field="name"]').value,
-        aliases: personRow.querySelector('[data-field="aliases"]').value.split(',').map((s) => s.trim()).filter(Boolean),
+        aliases: person?.aliases ?? [],
+        skills: splitList(personRow.querySelector('[data-field="skills"]').value),
       }));
     }
     if (personRow && t.hasAttribute('data-del-person') && confirm('Remover pessoa?')) report(api('DELETE', `/api/people/${personRow.dataset.person}`));

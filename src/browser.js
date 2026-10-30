@@ -27,5 +27,6 @@ const save = () => {
 window.localApi = async (method, url, body) => {
   const { status, data } = dispatch(routes, { method, url, body: body ?? {}, save });
   if (status >= 400) throw new Error(data.error);
-  return data;
+  // Cópia, como a resposta JSON do servidor: quem chama não altera o banco por engano.
+  return structuredClone(data);
 };

@@ -92,7 +92,10 @@ function applyPerson(db, current, input) {
   const aliases = Array.isArray(input.aliases ?? current?.aliases)
     ? (input.aliases ?? current.aliases).map((a) => text(a, 120)).filter(Boolean)
     : [];
-  return { id: current?.id ?? randomUUID(), name, aliases };
+  const skills = Array.isArray(input.skills ?? current?.skills)
+    ? (input.skills ?? current.skills).map((s) => text(s, 40)).filter(Boolean)
+    : [];
+  return { id: current?.id ?? randomUUID(), name, aliases, skills };
 }
 
 export function createPerson(db, input) {
@@ -243,6 +246,11 @@ function parseRoles(roles) {
   return roles.map((r) => ({ role: text(r.role, 60), count: r.count }));
 }
 
+// Funções cadastradas de cada pessoa. Quem não tem funções cadastradas não é escalado.
+function skillsOfFor(db) {
+  return (personId) => db.people.find((p) => p.id === personId)?.skills ?? [];
+}
+
 function candidatesFrom(db, input) {
   return (input.candidateIds ?? db.people.map((p) => p.id)).filter((id) => db.people.some((p) => p.id === id));
 }
@@ -265,7 +273,7 @@ export function generateMediaTeam(db, input) {
   const roles = parseRoles(input.roles);
   const [planned] = planServices(
     [{ title: text(input.title, 120) || 'Culto', slot, roles }],
-    { candidateIds: candidatesFrom(db, input), items: db.commitments },
+    { candidateIds: candidatesFrom(db, input), items: db.commitments, skillsOf: skillsOfFor(db) },
   );
   const service = withNames(db, planned);
   return {
@@ -295,7 +303,7 @@ export function generateMonth(db, input) {
   }
   requests.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
 
-  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items: db.commitments });
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items: db.commitments, skillsOf: skillsOfFor(db) });
   const services = planned.map((service) => withNames(db, service));
   return {
     month,

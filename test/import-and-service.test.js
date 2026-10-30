@@ -66,7 +66,7 @@ function seeded() {
   const db = emptyDb();
   const media = db.ministries.find((m) => m.isMedia);
   const reception = db.ministries.find((m) => m.name === 'Recepção');
-  db.people.push({ id: 'renata', name: 'Renata Silva', aliases: [] }, { id: 'joao', name: 'João Lima', aliases: [] });
+  db.people.push({ id: 'renata', name: 'Renata Silva', aliases: [], skills: ['Câmera'] }, { id: 'joao', name: 'João Lima', aliases: [], skills: ['Câmera'] });
   service.createCommitment(db, {
     ministryId: reception.id,
     title: 'Culto de Domingo',

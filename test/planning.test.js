@@ -58,7 +58,7 @@ test('texto do WhatsApp agrupa funções e marca faltas', () => {
 
 test('generateMonth gera todos os cultos do mês e o texto final', () => {
   const db = emptyDb();
-  for (const name of ['Ana', 'Joao', 'Maely']) service.createPerson(db, { name });
+  for (const name of ['Ana', 'Joao', 'Maely']) service.createPerson(db, { name, skills: ['Som'] });
   const result = service.generateMonth(db, {
     month: '2026-11',
     templates: [
@@ -74,7 +74,29 @@ test('generateMonth gera todos os cultos do mês e o texto final', () => {
 
 test('generateMonth rejeita mês inválido e culto sem funções', () => {
   const db = emptyDb();
-  service.createPerson(db, { name: 'Ana' });
+  service.createPerson(db, { name: 'Ana', skills: ['Som'] });
   assert.throws(() => service.generateMonth(db, { month: '2026-13', templates: [] }), (e) => e.status === 400);
   assert.throws(() => service.generateMonth(db, { month: '2026-11', templates: [{ weekday: 0, start: '18:00', end: '20:00', roles: [] }] }), (e) => e.status === 400);
+});
+
+test('só recebe a função quem sabe fazê-la', () => {
+  const requests = [{ title: 'Culto', roles: [{ role: 'Projeção', count: 1 }], slot: { date: '2026-11-01', start: '18:00', end: '20:00', endDate: null, ministryId: 'midia' } }];
+  const skillsOf = (id) => ({ kaique: ['Câmera'], paulo: ['Projeção'] })[id] ?? [];
+  const [planned] = planServices(requests, { candidateIds: ['kaique', 'paulo'], items: [], skillsOf });
+  assert.deepEqual(planned.people.map((p) => p.personId), ['paulo']);
+});
+
+test('quem faz tudo é o reserva: só entra quando os especialistas estão ocupados', () => {
+  const skillsOf = (id) => ({ eu: ['tudo'], kaique: ['Câmera'] })[id] ?? [];
+  const requests = [1, 2].map((n) => ({ title: 'Culto', roles: [{ role: 'Câmera', count: 1 }], slot: { date: '2026-11-0' + n, start: '18:00', end: '20:00', endDate: null, ministryId: 'midia' } }));
+  const planned = planServices(requests, { candidateIds: ['eu', 'kaique'], items: [], skillsOf });
+  assert.deepEqual(planned.map((s) => s.people[0].personId), ['kaique', 'kaique']);
+});
+
+test('a mesma pessoa pode voltar em cultos diferentes do mês', () => {
+  const skillsOf = () => ['Câmera'];
+  const requests = [1, 8].map((n) => ({ title: 'Culto', roles: [{ role: 'Câmera', count: 1 }], slot: { date: '2026-11-0' + n, start: '18:00', end: '20:00', endDate: null, ministryId: 'midia' } }));
+  const planned = planServices(requests, { candidateIds: ['renata'], items: [], skillsOf });
+  assert.equal(planned[0].people[0].personId, 'renata');
+  assert.equal(planned[1].people[0].personId, 'renata');
 });
