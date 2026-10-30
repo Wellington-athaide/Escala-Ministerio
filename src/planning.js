@@ -1,5 +1,5 @@
 import { proposeTeam } from './scheduling.js';
-import { normalizeText } from './csv-import.js';
+import { normalizeText } from './text.js';
 
 // Todas as datas (AAAA-MM-DD) de um mês (AAAA-MM) que caem no dia da semana informado (0 = domingo).
 export function datesOfMonth(month, weekday) {

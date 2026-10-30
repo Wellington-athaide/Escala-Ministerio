@@ -1,5 +1,5 @@
 import { DEFAULT_MIN_GAP, findConflicts } from './conflicts.js';
-import { normalizeText } from './csv-import.js';
+import { normalizeText } from './text.js';
 
 const PROPOSAL_ID = '__proposta__';
 

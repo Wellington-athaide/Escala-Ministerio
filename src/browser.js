@@ -5,10 +5,11 @@ import { emptyDb } from './seed.js';
 
 const KEY = 'escalas-da-igreja:v1';
 
+// Só as pessoas são guardadas. Dados antigos de outras telas são ignorados.
 function load() {
   try {
     const stored = localStorage.getItem(KEY);
-    return stored ? JSON.parse(stored) : emptyDb();
+    return stored ? { people: JSON.parse(stored).people ?? [] } : emptyDb();
   } catch {
     return emptyDb();
   }
