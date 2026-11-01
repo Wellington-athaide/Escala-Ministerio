@@ -13,6 +13,10 @@ export function datesOfMonth(month, weekday) {
   return dates;
 }
 
+// Dias de intervalo mínimo entre duas escalas reservadas da mesma pessoa.
+const MIN_DAYS_BETWEEN_RESERVED = 7;
+const daysBetween = (a, b) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
+
 // Monta a equipe de cada culto em sequência. Cada escolha entra no calendário usado pelos
 // cultos seguintes, então ninguém fica em dois cultos que se sobrepõem ou quase. A mesma
 // pessoa pode voltar em outros cultos. Entre candidatos empatados, quem tem menos escalas
@@ -24,23 +28,30 @@ export function planServices(requests, { candidateIds, items, minGap, skillsOf =
   const canDo = (personId, role) => !skillsOf || canPerform(skillsOf(personId), role);
   const isGeneralist = (personId) => (skillsOf?.(personId) ?? []).some((s) => normalizeText(s) === 'tudo');
 
-  // 1) Reserva os cultos de quem tem mínimo.
+  // 1) Reserva os cultos de quem tem mínimo, espaçados de pelo menos 7 dias.
+  // Só aceita datas mais próximas se não houver outra opção.
   const reserved = requests.map(() => []);
   const reservedItems = [];
   for (const [personId, wanted] of minimums) {
+    const reservedDates = [];
     let placed = 0;
-    requests.forEach((request, index) => {
-      if (placed >= wanted) return;
-      if (reserved[index].some((r) => r.personId === personId)) return;
-      if (!allowedOn(personId, request.slot.date)) return;
-      const role = request.roles.find((r) => !reserved[index].some((x) => x.role === r.role) && canDo(personId, r.role));
-      if (!role) return;
-      const clash = checkAvailability(personId, request.slot, [...items, ...reservedItems], { minGap });
-      if (clash.some((c) => c.severity === 'bloqueante')) return;
-      reserved[index].push({ personId, role: role.role });
-      reservedItems.push({ ...request.slot, id: `reservado-${index}-${personId}`, kind: 'escala', title: request.title, status: 'confirmada', people: [{ personId }] });
-      placed++;
-    });
+    for (const strictSpacing of [true, false]) {
+      for (let index = 0; index < requests.length && placed < wanted; index++) {
+        const request = requests[index];
+        const tooClose = reservedDates.some((d) => daysBetween(d, request.slot.date) < MIN_DAYS_BETWEEN_RESERVED);
+        if (strictSpacing && tooClose) continue;
+        if (reserved[index].some((r) => r.personId === personId)) continue;
+        if (!allowedOn(personId, request.slot.date)) continue;
+        const role = request.roles.find((r) => !reserved[index].some((x) => x.role === r.role) && canDo(personId, r.role));
+        if (!role) continue;
+        const clash = checkAvailability(personId, request.slot, [...items, ...reservedItems], { minGap });
+        if (clash.some((c) => c.severity === 'bloqueante')) continue;
+        reserved[index].push({ personId, role: role.role });
+        reservedItems.push({ ...request.slot, id: `reservado-${index}-${personId}`, kind: 'escala', title: request.title, status: 'confirmada', people: [{ personId }] });
+        reservedDates.push(request.slot.date);
+        placed++;
+      }
+    }
   }
 
   // 2) Monta os demais cultos. Quem já está reservado num culto não entra de novo nele.
