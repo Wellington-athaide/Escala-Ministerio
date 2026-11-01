@@ -114,3 +114,23 @@ test('cada função recebe exatamente uma pessoa, mesmo se pedida mais de uma ve
   assert.equal(result.people.length, 1);
   assert.deepEqual(result.unfilled, []);
 });
+
+test('culto sem horário vale o dia inteiro e bloqueia quem está num bloco da data', () => {
+  const db = emptyDb();
+  for (const name of ['Ana', 'Joao']) service.createPerson(db, { name, skills: ['Câmera'] });
+  const result = service.generateMonth(db, {
+    month: '2026-11',
+    templates: [{ weekday: 0, title: 'Culto de Domingo', roles: [{ role: 'Câmera' }] }],
+    externalText: '01/11\nAna',
+  });
+  assert.equal(result.services[0].slot.endDate, '2026-11-02');
+  assert.equal(result.services[0].people[0].personName, 'Joao');
+});
+
+test('culto do dia inteiro aparece só com a data no texto', () => {
+  const text = toWhatsappText({
+    services: [{ title: 'Culto', slot: { date: '2026-11-01', start: '00:00', end: '00:00', endDate: '2026-11-02' }, roles: [{ role: 'Som' }], people: [{ role: 'Som', personName: 'Ana' }], unfilled: [] }],
+  });
+  assert.match(text, /\*Domingo, 01\/11\*/);
+  assert.doesNotMatch(text, /0h às 0h/);
+});

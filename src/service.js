@@ -79,7 +79,13 @@ function candidatesFrom(db, input) {
   return (input.candidateIds ?? db.people.map((p) => p.id)).filter((id) => db.people.some((p) => p.id === id));
 }
 
+// Culto sem horário vale o dia inteiro: das 00:00 até 00:00 do dia seguinte.
 function checkedSlot({ date, start, end }) {
+  if (!start && !end) {
+    const next = new Date(`${date}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return { date, start: '00:00', end: '00:00', endDate: next.toISOString().slice(0, 10), ministryId: null };
+  }
   const slot = { date, start, end, endDate: null, ministryId: null };
   const timingError = checkTiming(slot);
   if (timingError) fail(timingError);

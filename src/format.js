@@ -25,7 +25,9 @@ export function toWhatsappText({ month, services, heading = 'Escala da Mídia' }
 
   for (const service of services) {
     const { slot, roles, people, unfilled } = service;
-    lines.push(`*${formatDay(slot.date)} · ${formatTime(slot.start)} às ${formatTime(slot.end)}*`);
+    // Culto sem horário (dia inteiro) mostra só a data.
+    const when = slot.endDate ? '' : ` · ${formatTime(slot.start)} às ${formatTime(slot.end)}`;
+    lines.push(`*${formatDay(slot.date)}${when}*`);
     lines.push(`_${service.title}_`);
     for (const { role } of roles) {
       const names = people.filter((p) => p.role === role).map((p) => p.personName);
