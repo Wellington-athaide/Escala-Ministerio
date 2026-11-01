@@ -40,7 +40,10 @@ function applyPerson(db, current, input) {
   }
   const aliases = (input.aliases ?? current?.aliases ?? []).map((a) => text(a, 120)).filter(Boolean);
   const skills = (input.skills ?? current?.skills ?? []).map((s) => text(s, 40)).filter(Boolean);
-  return { id: current?.id ?? randomUUID(), name, aliases, skills };
+  // Dias da semana (0 = domingo) em que a pessoa pode servir. Vazio = qualquer dia.
+  const weekdays = (input.weekdays ?? current?.weekdays ?? []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+  const observations = text(input.observations ?? current?.observations, 500);
+  return { id: current?.id ?? randomUUID(), name, aliases, skills, weekdays, observations };
 }
 
 export function createPerson(db, input) {
@@ -73,6 +76,14 @@ function parseRoles(roles) {
 
 function skillsOfFor(db) {
   return (personId) => db.people.find((p) => p.id === personId)?.skills ?? [];
+}
+
+// Pode servir nesta data? Respeita os dias da semana cadastrados para a pessoa.
+function allowedOnFor(db) {
+  return (personId, date) => {
+    const weekdays = db.people.find((p) => p.id === personId)?.weekdays ?? [];
+    return weekdays.length === 0 || weekdays.includes(new Date(`${date}T00:00:00Z`).getUTCDay());
+  };
 }
 
 function candidatesFrom(db, input) {
@@ -113,7 +124,7 @@ export function generateMediaTeam(db, input) {
   const { items, report } = restrictionsFrom(db, input.externalText, Number(input.date.slice(0, 4)));
   const [planned] = planServices(
     [{ title: text(input.title, 120) || 'Culto', slot, roles }],
-    { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db) },
+    { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db) },
   );
   const service = withNames(db, planned);
   return { ...service, markdown: toWhatsappText({ services: [service] }), report };
@@ -137,7 +148,7 @@ export function generateMonth(db, input) {
   requests.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
 
   const { items, report } = restrictionsFrom(db, input.externalText, Number(month.slice(0, 4)));
-  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db) });
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db) });
   const services = planned.map((service) => withNames(db, service));
   return { month, services, markdown: toWhatsappText({ month, services }), report };
 }
@@ -155,7 +166,7 @@ export function generateEvents(db, input) {
 
   const requests = dates.map((date) => ({ title, roles, slot: checkedSlot({ date }) }));
   const { items, report } = restrictionsFrom(db, input.externalText, Number(dates[0].slice(0, 4)));
-  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db) });
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db) });
   const services = planned.map((service) => withNames(db, service));
   return { title, services, markdown: toWhatsappText({ heading: title, services }), report };
 }

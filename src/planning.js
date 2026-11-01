@@ -17,7 +17,7 @@ export function datesOfMonth(month, weekday) {
 // cultos seguintes, então ninguém fica em dois cultos que se sobrepõem ou quase. A mesma
 // pessoa pode voltar em outros cultos. Entre candidatos empatados, quem tem menos escalas
 // no lote vem primeiro. Quem faz tudo fica sempre por último, como reserva.
-export function planServices(requests, { candidateIds, items, minGap, skillsOf = null }) {
+export function planServices(requests, { candidateIds, items, minGap, skillsOf = null, allowedOn = () => true }) {
   const working = [...items];
   const load = new Map();
   const isGeneralist = (personId) => (skillsOf?.(personId) ?? []).some((s) => normalizeText(s) === 'tudo');
@@ -26,7 +26,7 @@ export function planServices(requests, { candidateIds, items, minGap, skillsOf =
     const ordered = [...candidateIds].sort(
       (a, b) => Number(isGeneralist(a)) - Number(isGeneralist(b)) || (load.get(a) ?? 0) - (load.get(b) ?? 0),
     );
-    const result = proposeTeam({ slot: request.slot, roles: request.roles, candidateIds: ordered, items: working, minGap, skillsOf });
+    const result = proposeTeam({ slot: request.slot, roles: request.roles, candidateIds: ordered, items: working, minGap, skillsOf, allowedOn });
     for (const { personId } of result.people) load.set(personId, (load.get(personId) ?? 0) + 1);
     working.push({
       ...request.slot,

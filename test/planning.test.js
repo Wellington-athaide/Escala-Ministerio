@@ -156,3 +156,30 @@ test('eventos: exige pelo menos uma data válida', () => {
   assert.throws(() => service.generateEvents(db, { dates: [], roles: [{ role: 'Câmera' }] }), (e) => e.status === 400);
   assert.throws(() => service.generateEvents(db, { dates: ['2026-02-30'], roles: [{ role: 'Câmera' }] }), (e) => e.status === 400);
 });
+
+test('membro só escalado nos dias da semana em que pode servir', () => {
+  const db = emptyDb();
+  service.createPerson(db, { name: 'Ana', skills: ['Câmera'], weekdays: [4] });
+  service.createPerson(db, { name: 'Joao', skills: ['Câmera'] });
+  const result = service.generateMonth(db, {
+    month: '2026-11',
+    templates: [
+      { weekday: 0, title: 'Culto de Domingo', roles: [{ role: 'Câmera' }] },
+      { weekday: 4, title: 'Culto de Quinta', roles: [{ role: 'Câmera' }] },
+    ],
+  });
+  const sunday = result.services.find((s) => s.slot.date === '2026-11-01');
+  const thursday = result.services.find((s) => s.slot.date === '2026-11-05');
+  assert.equal(sunday.people[0].personName, 'Joao');
+  assert.equal(thursday.people[0].personName, 'Ana');
+});
+
+test('observações e dias da semana são guardados no membro', () => {
+  const db = emptyDb();
+  const person = service.updatePerson(db, service.createPerson(db, { name: 'Kaique', skills: ['Câmera'] }).id, {
+    weekdays: [0, 9, 4],
+    observations: 'Só câmera, não fica no datashow',
+  });
+  assert.deepEqual(person.weekdays, [0, 4]);
+  assert.equal(person.observations, 'Só câmera, não fica no datashow');
+});

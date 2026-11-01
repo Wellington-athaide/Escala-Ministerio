@@ -292,6 +292,8 @@ function events(view) {
 
 // ---------- Membros ----------
 
+const WEEK_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
 const MEMBERS_TEXT = `Renata - Câmera, Reels
 Duda - Câmera, Reels
 Arthur - Câmera, Reels
@@ -304,17 +306,22 @@ Eu - tudo`;
 
 function members(view) {
   view.innerHTML = `
-    <p class="muted">Cada pessoa só é escalada nas funções que ela faz. "tudo" vale para qualquer função, e a pessoa entra como reserva.</p>
+    <p class="muted">Cada pessoa só é escalada nas funções que ela faz. "tudo" vale para qualquer função, e a pessoa entra como reserva. Os dias marcados limitam quando ela pode servir. As observações são só para você: o gerador segue funções e dias.</p>
     <label>Um por linha: <code>Nome - função, função</code>. Quem já existe é atualizado.
       <textarea id="p-bulk" rows="9">${esc(MEMBERS_TEXT)}</textarea></label>
     <div class="row" style="margin-top:8px"><button class="primary" id="p-bulk-run">Cadastrar membros</button></div>
 
     <h3>Pessoas cadastradas</h3>
     <form id="p-new" class="row"><input name="name" placeholder="Nome" required><input name="skills" placeholder="Funções (ex.: Câmera, Reels)"><button class="primary">Adicionar</button></form>
-    ${state.people.map((p) => `<div class="person" data-person="${p.id}">
-      <input value="${esc(p.name)}" data-field="name" style="width:170px">
-      <input value="${esc((p.skills ?? []).join(', '))}" data-field="skills" placeholder="Funções" style="width:240px">
-      <button data-save-person>Salvar</button><button class="danger" data-del-person>Remover</button></div>`).join('') || '<p class="muted">Nenhuma pessoa cadastrada.</p>'}
+    ${state.people.map((p) => `<div class="panel" data-person="${p.id}">
+      <input value="${esc(p.name)}" data-field="name" style="width:100%;font-weight:600">
+      <label style="margin-top:8px">Funções que faz
+        <input value="${esc((p.skills ?? []).join(', '))}" data-field="skills" placeholder="Câmera, Reels"></label>
+      <div style="margin-top:8px"><span class="muted">Só pode servir nestes dias (sem marcar = qualquer dia)</span>
+        <div class="row" style="margin:4px 0 0">${WEEK_LABELS.map((w, i) => `<label class="inline"><input type="checkbox" data-day="${i}" ${(p.weekdays ?? []).includes(i) ? 'checked' : ''}>&nbsp;${w}</label>`).join('')}</div></div>
+      <label style="margin-top:8px">Observações
+        <textarea data-field="observations" rows="2" placeholder="Ex.: só câmera, não vai ao datashow">${esc(p.observations ?? '')}</textarea></label>
+      <div class="row" style="margin:8px 0 0"><button data-save-person>Salvar</button><button class="danger" data-del-person>Remover</button></div></div>`).join('') || '<p class="muted">Nenhuma pessoa cadastrada.</p>'}
     <p id="r-msg">${state.flash ?? ''}</p>`;
   state.flash = null;
 
@@ -336,7 +343,7 @@ function members(view) {
         const skills = splitList(rest.join(' - '));
         const existing = current.find((p) => norm(p.name) === norm(name));
         if (existing) {
-          await api('PUT', `/api/people/${existing.id}`, { name: existing.name, aliases: existing.aliases ?? [], skills });
+          await api('PUT', `/api/people/${existing.id}`, { name: existing.name, aliases: existing.aliases ?? [], skills, weekdays: existing.weekdays ?? [], observations: existing.observations ?? '' });
           updated++;
         } else {
           current.push(await api('POST', '/api/people', { name: name.trim(), skills }));
@@ -359,6 +366,8 @@ function members(view) {
         name: row.querySelector('[data-field="name"]').value,
         aliases: person?.aliases ?? [],
         skills: splitList(row.querySelector('[data-field="skills"]').value),
+        weekdays: [...row.querySelectorAll('[data-day]:checked')].map((c) => Number(c.dataset.day)),
+        observations: row.querySelector('[data-field="observations"]').value.trim(),
       }));
     }
     if (t.hasAttribute('data-del-person') && confirm('Remover pessoa?')) report(api('DELETE', `/api/people/${row.dataset.person}`));

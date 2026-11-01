@@ -24,7 +24,8 @@ export function checkAvailability(personId, slot, items, { minGap = DEFAULT_MIN_
 // ou indisponibilidade é removido ANTES de receber qualquer função. Conflitos suaves
 // (com escalas provisórias) não impedem, mas deixam quem os tem por último e geram aviso.
 // Cada função só recebe quem sabe fazê-la (`skillsOf`); sem `skillsOf`, qualquer um serve.
-export function proposeTeam({ slot, roles, candidateIds, items, minGap, skillsOf = null }) {
+// `allowedOn(personId, date)` diz se a pessoa pode servir naquela data.
+export function proposeTeam({ slot, roles, candidateIds, items, minGap, skillsOf = null, allowedOn = () => true }) {
   if (!Array.isArray(items)) {
     throw new TypeError('o gerador precisa do calendário de todos os ministérios');
   }
@@ -33,6 +34,8 @@ export function proposeTeam({ slot, roles, candidateIds, items, minGap, skillsOf
   const excluded = [];
   const eligible = [];
   for (const personId of candidateIds) {
+    // Quem não pode nesse dia da semana nem entra na conta.
+    if (!allowedOn(personId, slot.date)) continue;
     const issues = checkAvailability(personId, slot, items, { minGap });
     const blocking = issues.filter((issue) => issue.severity === 'bloqueante');
     if (blocking.length) {
