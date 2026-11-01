@@ -1,7 +1,7 @@
 import * as service from './service.js';
 import { ServiceError } from './service.js';
 
-const READ_ONLY_POSTS = new Set(['/api/generate', '/api/generate-month']);
+const READ_ONLY_POSTS = new Set(['/api/generate', '/api/generate-month', '/api/generate-events']);
 
 // Tabela de rotas da API. Compartilhada pelo servidor Node e pela versão do navegador.
 export function createRoutes(db) {
@@ -13,6 +13,7 @@ export function createRoutes(db) {
 
     { method: 'POST', path: '/api/generate', run: (_p, body) => service.generateMediaTeam(db, body) },
     { method: 'POST', path: '/api/generate-month', run: (_p, body) => service.generateMonth(db, body) },
+    { method: 'POST', path: '/api/generate-events', run: (_p, body) => service.generateEvents(db, body) },
   ].map((route) => ({ ...route, pattern: compile(route.path) }));
 }
 

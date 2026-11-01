@@ -134,3 +134,25 @@ test('culto do dia inteiro aparece só com a data no texto', () => {
   assert.match(text, /\*Domingo, 01\/11\*/);
   assert.doesNotMatch(text, /0h às 0h/);
 });
+
+test('eventos: cada data escolhida vira um evento de dia inteiro com o nome informado', () => {
+  const db = emptyDb();
+  for (const name of ['Ana', 'Joao']) service.createPerson(db, { name, skills: ['Câmera'] });
+  const result = service.generateEvents(db, {
+    title: 'Encontro de Jovens',
+    dates: ['2026-11-07', '2026-11-06'],
+    roles: [{ role: 'Câmera' }],
+    externalText: '06/11\nAna',
+  });
+  assert.deepEqual(result.services.map((s) => s.slot.date), ['2026-11-06', '2026-11-07']);
+  assert.equal(result.services[0].people[0].personName, 'Joao');
+  assert.match(result.markdown, /^\*Encontro de Jovens\*/);
+  assert.match(result.markdown, /_Encontro de Jovens_/);
+});
+
+test('eventos: exige pelo menos uma data válida', () => {
+  const db = emptyDb();
+  service.createPerson(db, { name: 'Ana', skills: ['Câmera'] });
+  assert.throws(() => service.generateEvents(db, { dates: [], roles: [{ role: 'Câmera' }] }), (e) => e.status === 400);
+  assert.throws(() => service.generateEvents(db, { dates: ['2026-02-30'], roles: [{ role: 'Câmera' }] }), (e) => e.status === 400);
+});

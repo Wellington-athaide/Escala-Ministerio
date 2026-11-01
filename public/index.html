@@ -43,6 +43,7 @@
   <h1>Escala da Mídia</h1>
   <nav id="nav">
     <button data-tab="generator">Gerador</button>
+    <button data-tab="events">Eventos</button>
     <button data-tab="members">Membros</button>
   </nav>
 </header>
@@ -76,7 +77,9 @@ function setTab(tab) {
 async function render() {
   state.people = await api('GET', '/api/people');
   const view = $('#view');
-  if (state.tab === 'members') members(view); else generator(view);
+  if (state.tab === 'members') members(view);
+  else if (state.tab === 'events') events(view);
+  else generator(view);
 }
 
 // ---------- Gerador ----------
@@ -210,6 +213,79 @@ function showResult(result, isMonth) {
       selection.removeAllRanges();
       selection.addRange(range);
       $('#g-msg').textContent = 'Não consegui copiar sozinho. O texto está selecionado: use Ctrl+C.';
+    }
+  };
+}
+
+// ---------- Eventos ----------
+
+const EVENT_WEEKDAYS = [
+  { value: 5, label: 'Sexta' },
+  { value: 6, label: 'Sábado' },
+  { value: 0, label: 'Domingo' },
+];
+
+// Todas as datas do mês que caem nos dias da semana marcados (0 = domingo).
+function monthDates(month, weekdays) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const dates = [];
+  for (let day = 1; day <= lastDay; day++) {
+    const date = new Date(Date.UTC(year, monthNumber - 1, day));
+    if (weekdays.includes(date.getUTCDay())) dates.push(date.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+const weekdayLabel = (iso) => EVENT_WEEKDAYS.find((w) => w.value === new Date(`${iso}T00:00:00Z`).getUTCDay())?.label ?? '';
+
+function events(view) {
+  view.innerHTML = `
+    <div class="row">
+      <label>Nome do evento <input id="e-name" value="Evento" style="min-width:220px"></label>
+      <label>Mês <input type="month" id="e-month" value="${addMonths(todayIso(), 1)}"></label>
+    </div>
+    <div class="row">
+      ${EVENT_WEEKDAYS.map((w) => `<label class="inline"><input type="checkbox" class="e-weekday" value="${w.value}" checked>&nbsp;${w.label}</label>`).join('')}
+    </div>
+    <p class="muted">Desmarque as datas que não terão evento.</p>
+    <div id="e-dates" class="row" style="flex-direction:column;align-items:flex-start;gap:6px"></div>
+    <label style="margin-top:12px">Funções (uma pessoa por função, separe por vírgula)
+      <textarea id="e-roles">Câmera, Reels, Projeção</textarea></label>
+    <label style="margin-top:12px">Escalas dos outros ministérios (cole aqui, uma ou várias)
+      <textarea id="e-external" rows="6"></textarea></label>
+    <div class="row" style="margin-top:10px"><button class="primary" id="e-run">Gerar evento</button></div>
+    <div id="g-result"></div>`;
+
+  const renderDates = () => {
+    const weekdays = [...view.querySelectorAll('.e-weekday:checked')].map((c) => Number(c.value));
+    const dates = weekdays.length ? monthDates($('#e-month').value, weekdays) : [];
+    $('#e-dates').innerHTML = dates.length
+      ? dates.map((d) => `<label class="inline"><input type="checkbox" class="e-date" value="${d}" checked>&nbsp;${weekdayLabel(d)} ${shortDate(d)}</label>`).join('')
+      : '<span class="muted">Nenhuma data com esses dias no mês.</span>';
+  };
+  view.querySelectorAll('.e-weekday').forEach((c) => { c.onchange = renderDates; });
+  $('#e-month').onchange = renderDates;
+  renderDates();
+
+  $('#e-run').onclick = async () => {
+    const out = $('#g-result');
+    const dates = [...view.querySelectorAll('.e-date:checked')].map((c) => c.value);
+    if (!dates.length) {
+      out.innerHTML = '<p class="error">Escolha pelo menos uma data.</p>';
+      return;
+    }
+    out.innerHTML = '<p class="muted">Gerando…</p>';
+    try {
+      const result = await api('POST', '/api/generate-events', {
+        title: $('#e-name').value,
+        dates,
+        roles: parseRoles($('#e-roles').value),
+        externalText: $('#e-external').value,
+      });
+      showResult(result, true);
+    } catch (error) {
+      out.innerHTML = `<p class="error">${esc(error.message)}</p>`;
     }
   };
 }

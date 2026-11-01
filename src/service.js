@@ -1,4 +1,4 @@
-import { checkTiming } from './time.js';
+import { checkTiming, isValidDate } from './time.js';
 import { datesOfMonth, planServices } from './planning.js';
 import { toWhatsappText } from './format.js';
 import { parseExternalSchedules } from './external.js';
@@ -140,4 +140,22 @@ export function generateMonth(db, input) {
   const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db) });
   const services = planned.map((service) => withNames(db, service));
   return { month, services, markdown: toWhatsappText({ month, services }), report };
+}
+
+// Eventos: o usuário escolhe as datas (ex.: sexta, sábado e domingo) e o nome do evento.
+// Cada data vira um evento de dia inteiro, planejado em ordem com as mesmas regras do gerador.
+export function generateEvents(db, input) {
+  const dates = Array.isArray(input.dates) ? [...new Set(input.dates)].sort() : [];
+  if (!dates.length) fail('escolha pelo menos uma data');
+  for (const date of dates) {
+    if (!isValidDate(date)) fail(`data inválida: ${date}`);
+  }
+  const title = text(input.title, 120) || 'Evento';
+  const roles = parseRoles(input.roles);
+
+  const requests = dates.map((date) => ({ title, roles, slot: checkedSlot({ date }) }));
+  const { items, report } = restrictionsFrom(db, input.externalText, Number(dates[0].slice(0, 4)));
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db) });
+  const services = planned.map((service) => withNames(db, service));
+  return { title, services, markdown: toWhatsappText({ heading: title, services }), report };
 }
