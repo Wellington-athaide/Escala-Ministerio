@@ -13,9 +13,12 @@ export function datesOfMonth(month, weekday) {
   return dates;
 }
 
-// Dias de intervalo mínimo entre duas escalas reservadas da mesma pessoa.
-const MIN_DAYS_BETWEEN_RESERVED = 7;
-const daysBetween = (a, b) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
+// Semana (segunda a domingo) à qual a data pertence, identificada pela segunda-feira.
+function weekOf(date) {
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString().slice(0, 10);
+}
 
 // Monta a equipe de cada culto em sequência. Cada escolha entra no calendário usado pelos
 // cultos seguintes, então ninguém fica em dois cultos que se sobrepõem ou quase. A mesma
@@ -28,18 +31,18 @@ export function planServices(requests, { candidateIds, items, minGap, skillsOf =
   const canDo = (personId, role) => !skillsOf || canPerform(skillsOf(personId), role);
   const isGeneralist = (personId) => (skillsOf?.(personId) ?? []).some((s) => normalizeText(s) === 'tudo');
 
-  // 1) Reserva os cultos de quem tem mínimo, espaçados de pelo menos 7 dias.
-  // Só aceita datas mais próximas se não houver outra opção.
+  // 1) Reserva os cultos de quem tem mínimo, em semanas diferentes (segunda a domingo).
+  // Só aceita a mesma semana se não houver outra opção.
   const reserved = requests.map(() => []);
   const reservedItems = [];
   for (const [personId, wanted] of minimums) {
-    const reservedDates = [];
+    const reservedWeeks = new Set();
     let placed = 0;
-    for (const strictSpacing of [true, false]) {
+    for (const strictWeek of [true, false]) {
       for (let index = 0; index < requests.length && placed < wanted; index++) {
         const request = requests[index];
-        const tooClose = reservedDates.some((d) => daysBetween(d, request.slot.date) < MIN_DAYS_BETWEEN_RESERVED);
-        if (strictSpacing && tooClose) continue;
+        const week = weekOf(request.slot.date);
+        if (strictWeek && reservedWeeks.has(week)) continue;
         if (reserved[index].some((r) => r.personId === personId)) continue;
         if (!allowedOn(personId, request.slot.date)) continue;
         const role = request.roles.find((r) => !reserved[index].some((x) => x.role === r.role) && canDo(personId, r.role));
@@ -48,7 +51,7 @@ export function planServices(requests, { candidateIds, items, minGap, skillsOf =
         if (clash.some((c) => c.severity === 'bloqueante')) continue;
         reserved[index].push({ personId, role: role.role });
         reservedItems.push({ ...request.slot, id: `reservado-${index}-${personId}`, kind: 'escala', title: request.title, status: 'confirmada', people: [{ personId }] });
-        reservedDates.push(request.slot.date);
+        reservedWeeks.add(week);
         placed++;
       }
     }

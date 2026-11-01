@@ -210,7 +210,7 @@ test('mínimo impossível gera aviso em vez de quebrar a geração', () => {
   assert.deepEqual(result.minimumWarnings, [{ personName: 'Wellington', wanted: 2, got: 0 }]);
 });
 
-test('mínimo distribuído em semanas diferentes, sem dias seguidos na mesma semana', () => {
+test('mínimo distribuído em semanas diferentes (segunda a domingo)', () => {
   const db = emptyDb();
   service.createPerson(db, { name: 'Wellington', skills: ['tudo'], minPerMonth: 2 });
   service.createPerson(db, { name: 'Ana', skills: ['Câmera'] });
@@ -222,5 +222,6 @@ test('mínimo distribuído em semanas diferentes, sem dias seguidos na mesma sem
     ],
   });
   const dates = result.services.filter((s) => s.people.some((p) => p.personName === 'Wellington')).map((s) => s.slot.date);
-  assert.deepEqual(dates, ['2026-11-01', '2026-11-08']);
+  // Quinta 05/11 e domingo 08/11 são da mesma semana: só uma delas entra.
+  assert.deepEqual(dates, ['2026-11-01', '2026-11-05']);
 });
