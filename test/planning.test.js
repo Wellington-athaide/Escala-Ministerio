@@ -183,3 +183,29 @@ test('observações e dias da semana são guardados no membro', () => {
   assert.deepEqual(person.weekdays, [0, 4]);
   assert.equal(person.observations, 'Só câmera, não fica no datashow');
 });
+
+test('mínimo no mês: o membro entra pelo menos o número pedido de vezes', () => {
+  const db = emptyDb();
+  service.createPerson(db, { name: 'Eu', skills: ['tudo'], minPerMonth: 2 });
+  for (const name of ['Ana', 'Joao', 'Maely']) service.createPerson(db, { name, skills: ['Câmera'] });
+  const result = service.generateMonth(db, {
+    month: '2026-11',
+    templates: [
+      { weekday: 0, title: 'Culto de Domingo', roles: [{ role: 'Câmera' }] },
+      { weekday: 4, title: 'Culto de Quinta', roles: [{ role: 'Câmera' }] },
+    ],
+  });
+  const count = result.services.filter((s) => s.people.some((p) => p.personName === 'Eu')).length;
+  assert.ok(count >= 2);
+  assert.deepEqual(result.minimumWarnings, []);
+});
+
+test('mínimo impossível gera aviso em vez de quebrar a geração', () => {
+  const db = emptyDb();
+  service.createPerson(db, { name: 'Eu', skills: ['tudo'], minPerMonth: 2, weekdays: [0] });
+  const result = service.generateMonth(db, {
+    month: '2026-11',
+    templates: [{ weekday: 4, title: 'Culto de Quinta', roles: [{ role: 'Câmera' }] }],
+  });
+  assert.deepEqual(result.minimumWarnings, [{ personName: 'Eu', wanted: 2, got: 0 }]);
+});

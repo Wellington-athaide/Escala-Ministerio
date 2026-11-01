@@ -43,7 +43,9 @@ function applyPerson(db, current, input) {
   // Dias da semana (0 = domingo) em que a pessoa pode servir. Vazio = qualquer dia.
   const weekdays = (input.weekdays ?? current?.weekdays ?? []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
   const observations = text(input.observations ?? current?.observations, 500);
-  return { id: current?.id ?? randomUUID(), name, aliases, skills, weekdays, observations };
+  // Mínimo de escalas no mês (0 = sem mínimo). O gerador garante esse número quando possível.
+  const minPerMonth = Math.min(10, Math.max(0, Number(input.minPerMonth ?? current?.minPerMonth ?? 0) || 0));
+  return { id: current?.id ?? randomUUID(), name, aliases, skills, weekdays, observations, minPerMonth: Math.floor(minPerMonth) };
 }
 
 export function createPerson(db, input) {
@@ -84,6 +86,19 @@ function allowedOnFor(db) {
     const weekdays = db.people.find((p) => p.id === personId)?.weekdays ?? [];
     return weekdays.length === 0 || weekdays.includes(new Date(`${date}T00:00:00Z`).getUTCDay());
   };
+}
+
+// Mínimos de escalas por pessoa, para o planejador reservar os cultos antes.
+function minimumsFor(db) {
+  return new Map(db.people.filter((p) => p.minPerMonth > 0).map((p) => [p.id, p.minPerMonth]));
+}
+
+// Avisa quando alguém não chegou ao mínimo (falta de função, dia ou conflito).
+function minimumWarnings(db, services) {
+  return db.people
+    .filter((p) => p.minPerMonth > 0)
+    .map((p) => ({ personName: p.name, wanted: p.minPerMonth, got: services.filter((s) => s.people.some((x) => x.personId === p.id)).length }))
+    .filter((w) => w.got < w.wanted);
 }
 
 function candidatesFrom(db, input) {
@@ -148,9 +163,9 @@ export function generateMonth(db, input) {
   requests.sort((a, b) => a.slot.date.localeCompare(b.slot.date) || a.slot.start.localeCompare(b.slot.start));
 
   const { items, report } = restrictionsFrom(db, input.externalText, Number(month.slice(0, 4)));
-  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db) });
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db), minimums: minimumsFor(db) });
   const services = planned.map((service) => withNames(db, service));
-  return { month, services, markdown: toWhatsappText({ month, services }), report };
+  return { month, services, markdown: toWhatsappText({ month, services }), report, minimumWarnings: minimumWarnings(db, services) };
 }
 
 // Eventos: o usuário escolhe as datas (ex.: sexta, sábado e domingo) e o nome do evento.
@@ -166,7 +181,7 @@ export function generateEvents(db, input) {
 
   const requests = dates.map((date) => ({ title, roles, slot: checkedSlot({ date }) }));
   const { items, report } = restrictionsFrom(db, input.externalText, Number(dates[0].slice(0, 4)));
-  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db) });
+  const planned = planServices(requests, { candidateIds: candidatesFrom(db, input), items, skillsOf: skillsOfFor(db), allowedOn: allowedOnFor(db), minimums: minimumsFor(db) });
   const services = planned.map((service) => withNames(db, service));
-  return { title, services, markdown: toWhatsappText({ heading: title, services }), report };
+  return { title, services, markdown: toWhatsappText({ heading: title, services }), report, minimumWarnings: minimumWarnings(db, services) };
 }

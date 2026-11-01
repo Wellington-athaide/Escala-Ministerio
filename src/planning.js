@@ -1,4 +1,4 @@
-import { proposeTeam } from './scheduling.js';
+import { proposeTeam, checkAvailability, canPerform } from './scheduling.js';
 import { normalizeText } from './text.js';
 
 // Todas as datas (AAAA-MM-DD) de um mês (AAAA-MM) que caem no dia da semana informado (0 = domingo).
@@ -17,17 +17,44 @@ export function datesOfMonth(month, weekday) {
 // cultos seguintes, então ninguém fica em dois cultos que se sobrepõem ou quase. A mesma
 // pessoa pode voltar em outros cultos. Entre candidatos empatados, quem tem menos escalas
 // no lote vem primeiro. Quem faz tudo fica sempre por último, como reserva.
-export function planServices(requests, { candidateIds, items, minGap, skillsOf = null, allowedOn = () => true }) {
-  const working = [...items];
-  const load = new Map();
+//
+// `minimums` (personId -> n) garante que a pessoa seja escalada pelo menos n vezes no lote:
+// esses cultos são reservados antes, em ordem cronológica, respeitando funções, dias e conflitos.
+export function planServices(requests, { candidateIds, items, minGap, skillsOf = null, allowedOn = () => true, minimums = new Map() }) {
+  const canDo = (personId, role) => !skillsOf || canPerform(skillsOf(personId), role);
   const isGeneralist = (personId) => (skillsOf?.(personId) ?? []).some((s) => normalizeText(s) === 'tudo');
 
+  // 1) Reserva os cultos de quem tem mínimo.
+  const reserved = requests.map(() => []);
+  const reservedItems = [];
+  for (const [personId, wanted] of minimums) {
+    let placed = 0;
+    requests.forEach((request, index) => {
+      if (placed >= wanted) return;
+      if (reserved[index].some((r) => r.personId === personId)) return;
+      if (!allowedOn(personId, request.slot.date)) return;
+      const role = request.roles.find((r) => !reserved[index].some((x) => x.role === r.role) && canDo(personId, r.role));
+      if (!role) return;
+      const clash = checkAvailability(personId, request.slot, [...items, ...reservedItems], { minGap });
+      if (clash.some((c) => c.severity === 'bloqueante')) return;
+      reserved[index].push({ personId, role: role.role });
+      reservedItems.push({ ...request.slot, id: `reservado-${index}-${personId}`, kind: 'escala', title: request.title, status: 'confirmada', people: [{ personId }] });
+      placed++;
+    });
+  }
+
+  // 2) Monta os demais cultos. Quem já está reservado num culto não entra de novo nele.
+  const working = [...items, ...reservedItems];
+  const load = new Map();
   return requests.map((request, index) => {
-    const ordered = [...candidateIds].sort(
-      (a, b) => Number(isGeneralist(a)) - Number(isGeneralist(b)) || (load.get(a) ?? 0) - (load.get(b) ?? 0),
-    );
-    const result = proposeTeam({ slot: request.slot, roles: request.roles, candidateIds: ordered, items: working, minGap, skillsOf, allowedOn });
-    for (const { personId } of result.people) load.set(personId, (load.get(personId) ?? 0) + 1);
+    const pre = reserved[index];
+    const roles = request.roles.filter((r) => !pre.some((p) => p.role === r.role));
+    const ordered = [...candidateIds]
+      .filter((id) => !pre.some((p) => p.personId === id))
+      .sort((a, b) => Number(isGeneralist(a)) - Number(isGeneralist(b)) || (load.get(a) ?? 0) - (load.get(b) ?? 0));
+    const result = proposeTeam({ slot: request.slot, roles, candidateIds: ordered, items: working, minGap, skillsOf, allowedOn });
+    const people = [...pre, ...result.people];
+    for (const { personId } of people) load.set(personId, (load.get(personId) ?? 0) + 1);
     working.push({
       ...request.slot,
       id: `planejado-${index}`,
@@ -36,6 +63,6 @@ export function planServices(requests, { candidateIds, items, minGap, skillsOf =
       status: 'confirmada',
       people: result.people.map(({ personId, role }) => ({ personId, role })),
     });
-    return { ...request, ...result };
+    return { ...request, ...result, people };
   });
 }

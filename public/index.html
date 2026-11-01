@@ -196,6 +196,7 @@ function showResult(result, isMonth) {
     </div>
     ${withExclusions.length ? `<div class="panel"><h3>Não escalados por outro compromisso</h3><ul>${withExclusions.map((s) => s.excluded.map((e) => `<li>${shortDate(s.slot.date)} ${esc(s.title)}: ${esc(e.personName)} (${e.motivos.map((m) => `${esc(m.other.title)} ${m.other.start}–${m.other.end}`).join(', ')})</li>`).join('')).join('')}</ul></div>` : ''}
     ${withGaps.length ? `<div class="panel"><h3>Vagas sem pessoa</h3><ul>${withGaps.map((s) => s.unfilled.map((u) => `<li>${shortDate(s.slot.date)} ${esc(s.title)}: ${esc(u.role)} (faltam ${u.faltam})</li>`).join('')).join('')}</ul></div>` : ''}
+    ${result.minimumWarnings?.length ? `<div class="panel"><h3>Mínimo não atingido</h3><ul>${result.minimumWarnings.map((w) => `<li>${esc(w.personName)}: pediu ${w.wanted}, ficou com ${w.got}</li>`).join('')}</ul></div>` : ''}
     <div class="panel">
       <h3>Texto para o WhatsApp</h3>
       <pre class="text" id="g-text">${esc(result.markdown)}</pre>
@@ -319,6 +320,8 @@ function members(view) {
         <input value="${esc((p.skills ?? []).join(', '))}" data-field="skills" placeholder="Câmera, Reels"></label>
       <div style="margin-top:8px"><span class="muted">Só pode servir nestes dias (sem marcar = qualquer dia)</span>
         <div class="row" style="margin:4px 0 0">${WEEK_LABELS.map((w, i) => `<label class="inline"><input type="checkbox" data-day="${i}" ${(p.weekdays ?? []).includes(i) ? 'checked' : ''}>&nbsp;${w}</label>`).join('')}</div></div>
+      <label style="margin-top:8px">Mínimo de escalas no mês (0 = sem mínimo)
+        <input type="number" min="0" max="10" value="${p.minPerMonth ?? 0}" data-field="minPerMonth" style="width:110px"></label>
       <label style="margin-top:8px">Observações
         <textarea data-field="observations" rows="2" placeholder="Ex.: só câmera, não vai ao datashow">${esc(p.observations ?? '')}</textarea></label>
       <div class="row" style="margin:8px 0 0"><button data-save-person>Salvar</button><button class="danger" data-del-person>Remover</button></div></div>`).join('') || '<p class="muted">Nenhuma pessoa cadastrada.</p>'}
@@ -343,7 +346,7 @@ function members(view) {
         const skills = splitList(rest.join(' - '));
         const existing = current.find((p) => norm(p.name) === norm(name));
         if (existing) {
-          await api('PUT', `/api/people/${existing.id}`, { name: existing.name, aliases: existing.aliases ?? [], skills, weekdays: existing.weekdays ?? [], observations: existing.observations ?? '' });
+          await api('PUT', `/api/people/${existing.id}`, { name: existing.name, aliases: existing.aliases ?? [], skills, weekdays: existing.weekdays ?? [], observations: existing.observations ?? '', minPerMonth: existing.minPerMonth ?? 0 });
           updated++;
         } else {
           current.push(await api('POST', '/api/people', { name: name.trim(), skills }));
@@ -368,6 +371,7 @@ function members(view) {
         skills: splitList(row.querySelector('[data-field="skills"]').value),
         weekdays: [...row.querySelectorAll('[data-day]:checked')].map((c) => Number(c.dataset.day)),
         observations: row.querySelector('[data-field="observations"]').value.trim(),
+        minPerMonth: Number(row.querySelector('[data-field="minPerMonth"]').value) || 0,
       }));
     }
     if (t.hasAttribute('data-del-person') && confirm('Remover pessoa?')) report(api('DELETE', `/api/people/${row.dataset.person}`));
